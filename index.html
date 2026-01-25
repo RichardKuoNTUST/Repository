@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票記帳本</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md border border-gray-100">
+        <h2 class="text-gray-400 text-sm font-bold tracking-widest mb-1">目前總資產 (TWD)</h2>
+        
+        <div class="mb-8">
+            <span id="total-assets" class="text-4xl font-black text-slate-800">加載中...</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 border-t border-gray-100 pt-6">
+            <div>
+                <p class="text-xs text-gray-400 font-medium">今日收益</p>
+                <p id="daily-profit" class="text-lg font-bold">--</p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-gray-400 font-medium">今年收益</p>
+                <p id="yearly-profit" class="text-lg font-bold">--</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 設定你的 Supabase 資訊 (請替換成你剛剛記下的內容)
+        const SUPABASE_URL = '你的_PROJECT_URL';
+        const SUPABASE_KEY = '你的_ANON_KEY';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 2. 從資料庫抓取資料並顯示
+        async function fetchStockData() {
+            const { data, error } = await _supabase
+                .from('assets')
+                .select('*')
+                .limit(1)
+                .single();
+
+            if (error) {
+                console.error('抓取失敗:', error);
+                return;
+            }
+
+            // 3. 更新介面
+            document.getElementById('total-assets').innerText = `$ ${data.total_amount.toLocaleString()}`;
+            
+            const dailyEl = document.getElementById('daily-profit');
+            dailyEl.innerText = `+${data.daily_profit.toLocaleString()} (${data.daily_percent}%)`;
+            dailyEl.className = data.daily_profit >= 0 ? 'text-lg font-bold text-red-500' : 'text-lg font-bold text-green-500';
+
+            const yearlyEl = document.getElementById('yearly-profit');
+            yearlyEl.innerText = `+${data.yearly_profit.toLocaleString()} (${data.yearly_percent}%)`;
+            yearlyEl.className = data.yearly_profit >= 0 ? 'text-lg font-bold text-red-500' : 'text-lg font-bold text-green-500';
+        }
+
+        fetchStockData();
+    </script>
+</body>
+</html>
