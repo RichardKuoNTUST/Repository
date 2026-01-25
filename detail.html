@@ -48,9 +48,17 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="p-4 border-b border-gray-50 bg-gray-50/50">
-                <h3 class="font-bold text-gray-700">持股明細</h3>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="p-4 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
+                    <h3 class="font-bold text-gray-700">持股明細</h3>
+                    <div class="space-x-2">
+                        <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition">新增</button>
+                        <button class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium transition">編輯</button>
+                    </div>
+                </div>
+                
             </div>
+            
             
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
@@ -74,7 +82,59 @@
         const SUPABASE_URL = 'https://qjfeurisdvhalxjgfmfu.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const modal = document.getElementById('addModal');
 
+        // 開啟視窗
+        function openModal() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // 預設日期為今天
+            document.getElementById('trade-date').valueAsDate = new Date();
+        }
+        
+        // 關閉視窗
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        // 自動計算價位：(總價錢 - 交易費) / 股數
+        function calculatePrice() {
+            const shares = parseFloat(document.getElementById('trade-shares').value) || 0;
+            const fee = parseFloat(document.getElementById('trade-fee').value) || 0;
+            const total = parseFloat(document.getElementById('total-price').value) || 0;
+            
+            if (shares > 0) {
+                const price = (total - fee) / shares;
+                document.getElementById('calc-price').innerText = `$ ${price.toFixed(2)}`;
+            } else {
+                document.getElementById('calc-price').innerText = `$ 0.00`;
+            }
+        }
+        
+        // 監聽輸入框，即時計算
+        document.getElementById('trade-shares').addEventListener('input', calculatePrice);
+        document.getElementById('trade-fee').addEventListener('input', calculatePrice);
+        document.getElementById('total-price').addEventListener('input', calculatePrice);
+        
+        // 儲存功能 (目前先顯示在 Console)
+        async function handleSave() {
+            const stockData = {
+                symbol: document.getElementById('stock-symbol').value,
+                shares: document.getElementById('trade-shares').value,
+                fee: document.getElementById('trade-fee').value,
+                total: document.getElementById('total-price').value,
+                date: document.getElementById('trade-date').value
+            };
+            
+            console.log('準備儲存到 Supabase:', stockData);
+            
+            // 這裡之後會放入 Supabase 的 insert 語法
+            // const { error } = await _supabase.from('holdings').insert([stockData]);
+            
+            alert('儲存功能開發中！');
+            closeModal();
+        }
         async function loadDetailData() {
             // 1. 抓取上方總表資料 (假設從 assets 表)
             const { data: assetData } = await _supabase.from('assets').select('*').single();
@@ -104,5 +164,48 @@
 
         loadDetailData();
     </script>
+        <div id="addModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-gray-800 mb-6">新增交易紀錄</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">股票代號</label>
+                    <input type="text" id="stock-symbol" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例如: 2330">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">買賣股數</label>
+                        <input type="number" id="trade-shares" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">交易費</label>
+                        <input type="number" id="trade-fee" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0">
+                    </div>
+                </div>
+    
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">買賣總價錢</label>
+                    <input type="number" id="total-price" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0">
+                </div>
+    
+                <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
+                    <p class="text-xs text-gray-500">計算出的買賣價位：</p>
+                    <p id="calc-price" class="text-lg font-bold text-blue-600">$ 0.00</p>
+                </div>
+    
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">買賣日期</label>
+                    <input type="date" id="trade-date" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+    
+            <div class="flex space-x-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 rounded-xl transition">Cancel</button>
+                <button onclick="handleSave()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl transition">Save</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
