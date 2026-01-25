@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票詳細帳本</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto mb-6 flex items-center">
+        <a href="index.html" class="flex items-center text-gray-600 hover:text-blue-600 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span class="font-medium">返回主首頁</span>
+        </a>
+    </div>
+
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <div class="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+            <h2 class="text-gray-400 text-xs font-bold tracking-widest uppercase mb-2">目前總資產</h2>
+            <div class="text-3xl font-black text-slate-800 mb-6" id="total-assets">$ 0</div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div>
+                    <p class="text-xs text-gray-400">今日收益</p>
+                    <p id="daily-profit" class="text-lg font-bold">--</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400">今年收益</p>
+                    <p id="yearly-profit" class="text-lg font-bold">--</p>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <div class="flex justify-between text-xs font-medium">
+                    <span class="text-blue-600">股票 (70%)</span>
+                    <span class="text-emerald-500">現金 (30%)</span>
+                </div>
+                <div class="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                    <div id="ratio-stock" class="bg-blue-500 h-full" style="width: 70%"></div>
+                    <div id="ratio-cash" class="bg-emerald-400 h-full" style="width: 30%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-4 border-b border-gray-50 bg-gray-50/50">
+                <h3 class="font-bold text-gray-700">持股明細</h3>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-50 text-gray-500">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">股票代號</th>
+                            <th class="px-4 py-3 font-medium">持有股數</th>
+                            <th class="px-4 py-3 font-medium text-right">目前市值</th>
+                            <th class="px-4 py-3 font-medium text-right">收益 (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-list" class="divide-y divide-gray-100">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase 設定 (請與 index.html 相同)
+        const SUPABASE_URL = '你的_PROJECT_URL';
+        const SUPABASE_KEY = '你的_ANON_KEY';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function loadDetailData() {
+            // 1. 抓取上方總表資料 (假設從 assets 表)
+            const { data: assetData } = await _supabase.from('assets').select('*').single();
+            if (assetData) {
+                document.getElementById('total-assets').innerText = `$ ${assetData.total_amount.toLocaleString()}`;
+                // ... 更新今日/今年收益 (同上一個範例)
+            }
+
+            // 2. 抓取下方股票清單
+            const { data: holdings } = await _supabase.from('holdings').select('*');
+            const listContainer = document.getElementById('stock-list');
+            
+            holdings.forEach(stock => {
+                const row = `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-4 py-4 font-bold text-slate-700">${stock.symbol}</td>
+                        <td class="px-4 py-4">${stock.shares.toLocaleString()}</td>
+                        <td class="px-4 py-4 text-right font-medium">$${stock.market_value.toLocaleString()}</td>
+                        <td class="px-4 py-4 text-right font-bold ${stock.profit >= 0 ? 'text-red-500' : 'text-green-500'}">
+                            ${stock.profit_percent}%
+                        </td>
+                    </tr>
+                `;
+                listContainer.innerHTML += row;
+            });
+        }
+
+        loadDetailData();
+    </script>
+</body>
+</html>
