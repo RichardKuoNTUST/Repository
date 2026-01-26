@@ -37,7 +37,9 @@
                             <th class="px-4 py-3 font-medium">股票代號</th>
                             <th class="px-4 py-3 font-medium">即時現值</th>
                             <th class="px-4 py-3 font-medium text-right">持有股數</th>
+                            <th class="px-4 py-3 font-medium text-right">持有成本</th>
                             <th class="px-4 py-3 font-medium text-right">目前市值</th>
+                            <th class="px-4 py-3 font-medium text-right">總獲利 (%)</th>
                             <th class="px-4 py-3 font-medium text-right">操作</th>
                         </tr>
                     </thead>
@@ -192,36 +194,52 @@
                 let grandTotal = 0;
         
                 // 遍歷分組後的資料
+                // ... 在 groupedData 遍歷循環中 ...
                 for (const symbol in groupedData) {
                     const group = groupedData[symbol];
                     const price = await getLivePrice(group.symbol);
-                    const currentVal = price ? (price * group.totalShares) : 0;
-                    grandTotal += currentVal;
-        
-                    // 計算損益 % (選配)
-                    const profit = currentVal - group.totalCost;
-                    const profitPercent = group.totalCost > 0 ? ((profit / group.totalCost) * 100).toFixed(2) : 0;
-        
+                    
+                    // 1. 計算市值與獲利
+                    const currentMarketValue = price ? (price * group.totalShares) : 0;
+                    
+                    // 假設你在資料表中有 dividend 欄位，若無則預設為 0
+                    const totalDividends = group.history.reduce((sum, t) => sum + (t.dividend || 0), 0);
+                    
+                    // 總獲利 = 目前市值 - 原始投入成本 + 總股息
+                    const totalProfit = currentMarketValue - group.totalCost + totalDividends;
+                    
+                    // 獲利率 = (總獲利 / 總成本) * 100
+                    const profitPercent = group.totalCost > 0 ? ((totalProfit / group.totalCost) * 100).toFixed(2) : "0.00";
+                
+                    // 判斷顏色 (台股習慣：漲紅跌綠)
+                    const statusColor = totalProfit >= 0 ? "text-red-500" : "text-green-600";
+                
                     tableRows += `
                         <tr class="hover:bg-gray-50 border-b border-gray-50">
                             <td class="px-4 py-4">
                                 <div class="font-bold text-slate-700">${group.symbol}</div>
-                                <div class="text-[10px] text-gray-400">共 ${group.history.length} 筆交易</div>
                             </td>
                             <td class="px-4 py-4">
-                                ${price ? `<span class="text-emerald-600 font-bold">$${price}</span>` : `<span class="text-gray-400 italic">讀取中</span>`}
+                                ${price ? `<span class="text-emerald-600 font-bold">$${price}</span>` : `<span class="text-gray-300 italic text-xs">讀取中</span>`}
                             </td>
                             <td class="px-4 py-4 text-right font-medium">${group.totalShares.toLocaleString()}</td>
-                            <td class="px-4 py-4 text-right">
-                                <div class="font-bold">$${currentVal.toLocaleString()}</div>
-                                <div class="text-[10px] ${profit >= 0 ? 'text-red-500' : 'text-green-500'}">
-                                    ${profit >= 0 ? '+' : ''}${profitPercent}%
-                                </div>
+                            
+                            <td class="px-4 py-4 text-right text-slate-600">
+                                $${group.totalCost.toLocaleString()}
                             </td>
+                
+                            <td class="px-4 py-4 text-right font-bold text-slate-700">
+                                $${currentMarketValue.toLocaleString()}
+                            </td>
+                
                             <td class="px-4 py-4 text-right">
-                                <button onclick='openEditModal(${JSON.stringify(group)})' class="bg-slate-100 text-slate-600 px-3 py-1 rounded-md text-xs font-bold hover:bg-blue-50 hover:text-blue-600 transition">
-                                    明細 / 編輯
-                                </button>
+                                <div class="${statusColor} font-bold">$${totalProfit.toLocaleString()}</div>
+                                <div class="${statusColor} text-[10px] font-medium">${totalProfit >= 0 ? '▲' : '▼'} ${profitPercent}%</div>
+                                ${totalDividends > 0 ? `<div class="text-blue-400 text-[9px]">含股息 $${totalDividends}</div>` : ''}
+                            </td>
+                
+                            <td class="px-4 py-4 text-right">
+                                <button onclick='openEditModal(${JSON.stringify(group)})' class="bg-slate-100 text-slate-600 px-3 py-1 rounded-md text-xs font-bold hover:bg-blue-50 hover:text-blue-600 transition">明細</button>
                             </td>
                         </tr>`;
                 }
