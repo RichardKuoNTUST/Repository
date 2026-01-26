@@ -58,12 +58,14 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead class="bg-gray-50 text-gray-500">
-                        <tr>
-                            <th class="px-4 py-3 font-medium">股票代號</th>
-                            <th class="px-4 py-3 font-medium text-right">持有股數</th>
-                            <th class="px-4 py-3 font-medium text-right">目前市值</th>
-                            <th class="px-4 py-3 font-medium text-right">操作</th>
-                        </tr>
+                        <thead class="bg-gray-50 text-gray-500">
+                            <tr>
+                                <th class="px-4 py-3 font-medium">股票代號</th>
+                                <th class="px-4 py-3 font-medium text-right">現價</th> <th class="px-4 py-3 font-medium text-right">持有股數</th>
+                                <th class="px-4 py-3 font-medium text-right">目前市值</th>
+                                <th class="px-4 py-3 font-medium text-right">操作</th>
+                            </tr>
+                        </thead>
                     </thead>
                     <tbody id="stock-list" class="divide-y divide-gray-100">
                         </tbody>
@@ -226,8 +228,13 @@
             holdings?.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 transition";
+                
+                // 計算現價：如果有 current_price 欄位就顯示，沒有就用市值除以股數
+                const curPrice = item.current_price || (item.market_value / item.shares) || 0;
+            
                 tr.innerHTML = `
                     <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
+                    <td class="px-4 py-4 text-right text-blue-600 font-medium">$${curPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                     <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
                     <td class="px-4 py-4 text-right font-medium">$${item.market_value?.toLocaleString() || 0}</td>
                     <td class="px-4 py-4 text-right space-x-2">
@@ -276,6 +283,54 @@
                 // 更新當前頁面的顯示
                 document.getElementById('total-assets').innerText = `$ ${totalAmount.toLocaleString()}`;
             }
+        }
+
+        const FINNHUB_KEY = '你的_FINNHUB_API_KEY';
+
+        // 抓取單一股票即時價格
+        async function getLivePrice(symbol) {
+            // 注意：美股代號直接輸入(如 AAPL)，台股需加 .TW (如 2330.TW)
+            try {
+                const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`);
+                const data = await response.json();
+                return data.c; // 'c' 代表 Current Price (現值)
+            } catch (e) {
+                console.error("抓取股價失敗:", e);
+                return 0;
+            }
+        }
+        
+        // 修改原本的載入資料函數
+        async function loadDetailData() {
+            const { data: holdings } = await _supabase.from('holdings').select('*').order('created_at', { ascending: false });
+            const list = document.getElementById('stock-list');
+            list.innerHTML = "";
+        
+            for (const item of holdings) {
+                // --- 核心邏輯：即時抓取 ---
+                const livePrice = await getLivePrice(item.symbol);
+                const currentMarketValue = livePrice * item.shares;
+                
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition";
+                tr.innerHTML = `
+                    <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
+                    <td class="px-4 py-4 text-blue-600 font-semibold">$ ${livePrice.toLocaleString() || '讀取中'}</td>
+                    <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
+                    <td class="px-4 py-4 text-right font-medium">$ ${currentMarketValue.toLocaleString()}</td>
+                    <td class="px-4 py-4 text-right space-x-2">
+                        <button onclick='openEditModalById(${JSON.stringify(item)})' class="text-blue-600 font-bold hover:underline text-xs">編輯</button>
+                        <button onclick="deleteStock(${item.id})" class="text-red-500 font-bold hover:underline text-xs">刪除</button>
+                    </td>
+                `;
+                list.appendChild(tr);
+                
+                // 可選：順便把最新的市值更新回 Supabase，保持同步
+                await _supabase.from('holdings').update({ market_value: currentMarketValue }).eq('id', item.id);
+            }
+            
+            // 更新完所有持股後，更新主畫面的總資產
+            await updateAssetsTotal();
         }
 
         // 輔助函式：處理點擊編輯按鈕
