@@ -289,19 +289,21 @@
         async function getLivePrice(symbol) {
             try {
                 const cleanSymbol = symbol.toUpperCase().trim();
-                // 使用一個免費的 CORS 代理伺服器，解決 GitHub Pages 無法直接抓取 Yahoo 的問題
-                const proxy = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=";
+                // 使用 allorigins 代理伺服器，這是目前最穩定的免費解決方案
+                const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${cleanSymbol}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
                 
-                // 注意：某些環境可能還是會擋 CORS，若發生錯誤，可嘗試加上 https://corsproxy.io/? 作為前綴
-                const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(proxy + cleanSymbol)}`);
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error('代理伺服器回應錯誤');
                 
-                if (!response.ok) throw new Error('Yahoo API 回應錯誤');
+                const rawData = await response.json();
+                // AllOrigins 會把結果包在 .contents 字串裡，需要 JSON.parse
+                const data = JSON.parse(rawData.contents);
                 
-                const data = await response.json();
                 const result = data.quoteResponse.result[0];
                 
                 if (result && result.regularMarketPrice) {
-                    return result.regularMarketPrice; // 回傳目前成交價
+                    return result.regularMarketPrice;
                 }
                 return null;
             } catch (e) {
@@ -325,9 +327,19 @@
             for (const item of holdings) {
                 const livePrice = await getLivePrice(item.symbol);
                 
-                // 容錯顯示
-                const displayPrice = livePrice !== null ? `$ ${livePrice.toLocaleString()}` : '抓取失敗';
-                const currentMarketValue = livePrice !== null ? (livePrice * item.shares) : (item.market_value || 0);
+                // 這裡做嚴謹的判斷
+                let displayPrice, currentMarketValue;
+            
+                if (livePrice !== null && !isNaN(livePrice)) {
+                    displayPrice = `$ ${Number(livePrice).toLocaleString()}`;
+                    currentMarketValue = livePrice * (item.shares || 0);
+                    
+                    // 抓到新價格，順便更新資料庫
+                    await _supabase.from('holdings').update({ market_value: currentMarketValue }).eq('id', item.id);
+                } else {
+                    displayPrice = '讀取中...'; // 或顯示 '暫無資料'
+                    currentMarketValue = item.market_value || 0; // 抓不到就用舊的
+                }
                 
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 transition";
@@ -342,11 +354,6 @@
                     </td>
                 `;
                 list.appendChild(tr);
-        
-                // 如果抓到新價格，自動更新資料庫市值
-                if (livePrice !== null) {
-                    await _supabase.from('holdings').update({ market_value: currentMarketValue }).eq('id', item.id);
-                }
             }
             
             // 更新主畫面資產
