@@ -86,128 +86,132 @@
     </div>
 
     <script>
+        // --- 1. 基本設定 ---
         const SUPABASE_URL = 'https://qjfeurisdvhalxjgfmfu.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy';
+        const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy'; // 這是你的 Key
+        const FINMIND_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yNiAxNTo1MjowNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi43LjU0In0.QvrnRVyRyHA4i_u7SV2enOrk3RpcoKuG7V3rUkqSv88'; // <--- 請在此處貼上你的 FinMind Token
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        // --- 更加強壯的價格抓取函數 ---
-        const FINMIND_TOKEN = '	
-eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yNiAxNTo1MjowNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi43LjU0In0.QvrnRVyRyHA4i_u7SV2enOrk3RpcoKuG7V3rUkqSv88';
         
+        // --- 2. 抓取股價 (FinMind 版) ---
         async function getLivePrice(symbol) {
+            if (FINMIND_TOKEN === 'YOUR_FINMIND_TOKEN') {
+                console.warn("尚未設定 FinMind Token");
+                return null;
+            }
             try {
-                // FinMind 不需要加 .TW，只需要號碼 (例如 2357)
+                // 取得純數字代號 (例如 2357.TW -> 2357)
                 const stockId = symbol.split('.')[0]; 
-                
-                // 使用 FinMind 的資料接口
                 const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&token=${FINMIND_TOKEN}`;
                 
                 const response = await fetch(url);
                 const json = await response.json();
         
-                // 取得最後一筆成交價 (Close)
                 if (json.data && json.data.length > 0) {
-                    const lastData = json.data[json.data.length - 1];
-                    return lastData.close;
+                    // 取得最新一筆成交價
+                    return json.data[json.data.length - 1].close;
                 }
                 return null;
             } catch (e) {
-                console.error("FinMind 抓取失敗:", e);
+                console.error("FinMind 連線失敗:", e);
                 return null;
             }
         }
         
-        // --- 修正後的資料載入，避免因 API 失敗導致畫面空白 ---
+        // --- 3. 畫面載入邏輯 ---
         async function loadDetailData() {
-            const { data: holdings } = await _supabase.from('holdings').select('*').order('created_at', { ascending: false });
             const list = document.getElementById('stock-list');
-            list.innerHTML = "";
+            list.innerHTML = "<tr><td colspan='5' class='p-4 text-center text-gray-400'>讀取中...</td></tr>";
         
-            let totalMarketValue = 0;
+            try {
+                const { data: holdings, error } = await _supabase
+                    .from('holdings')
+                    .select('*')
+                    .order('created_at', { ascending: false });
         
-            for (const item of holdings) {
-                const livePrice = await getLivePrice(item.symbol);
-                
-                // 優先使用即時價格，抓不到就用資料庫原本存的市值
-                const currentMarketValue = livePrice ? (livePrice * item.shares) : (item.market_value || 0);
-                totalMarketValue += currentMarketValue;
+                if (error) throw error;
         
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 transition border-b border-gray-50";
-                tr.innerHTML = `
-                    <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
-                    <td class="px-4 py-4">
-                        ${livePrice ? `<span class="text-emerald-600 font-bold">$${livePrice}</span>` : `<span class="text-gray-400 text-xs">離線/收盤值</span>`}
-                    </td>
-                    <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
-                    <td class="px-4 py-4 text-right font-medium">$${currentMarketValue.toLocaleString()}</td>
-                    <td class="px-4 py-4 text-right space-x-2">
-                        <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 font-bold text-xs">編輯</button>
-                        <button onclick="deleteStock(${item.id})" class="text-red-500 font-bold text-xs">刪除</button>
-                    </td>
-                `;
-                list.appendChild(tr);
+                list.innerHTML = ""; 
+                let totalMarketValue = 0;
         
-                // 如果有抓到新價格，悄悄更新資料庫
-                if (livePrice) {
-                    await _supabase.from('holdings').update({ market_value: currentMarketValue }).eq('id', item.id);
+                for (const item of holdings) {
+                    const livePrice = await getLivePrice(item.symbol);
+                    const hasPrice = (livePrice !== null);
+                    const currentVal = hasPrice ? (livePrice * item.shares) : (item.market_value || 0);
+                    totalMarketValue += currentVal;
+        
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50 transition border-b border-gray-50";
+                    tr.innerHTML = `
+                        <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
+                        <td class="px-4 py-4">
+                            ${hasPrice ? `<span class="text-emerald-600 font-bold">$${livePrice}</span>` : `<span class="text-gray-400 text-xs">Token未設定</span>`}
+                        </td>
+                        <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
+                        <td class="px-4 py-4 text-right font-medium">$${currentVal.toLocaleString()}</td>
+                        <td class="px-4 py-4 text-right">
+                            <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 font-bold text-xs">編輯</button>
+                            <button onclick="deleteStock(${item.id})" class="text-red-500 font-bold text-xs ml-2">刪除</button>
+                        </td>
+                    `;
+                    list.appendChild(tr);
+        
+                    if (hasPrice) {
+                        await _supabase.from('holdings').update({ market_value: currentVal }).eq('id', item.id);
+                    }
                 }
+                
+                // 更新上方資產顯示與資料庫
+                document.getElementById('total-assets').innerText = `$ ${totalMarketValue.toLocaleString()}`;
+                await _supabase.from('assets').update({ total_amount: totalMarketValue }).eq('id', 1);
+        
+            } catch (err) {
+                console.error("載入失敗:", err);
+                list.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">連線失敗</td></tr>`;
             }
-            updateAssetsTotal(totalMarketValue);
         }
-
-        // --- 視窗與計算 ---
+        
+        // --- 4. 視窗控制與存檔 ---
         function openModal(item = null) {
             document.getElementById('addModal').classList.replace('hidden', 'flex');
             if (item) {
-                document.getElementById('modal-title').innerText = "編輯紀錄";
                 document.getElementById('edit-id').value = item.id;
                 document.getElementById('stock-symbol').value = item.symbol;
                 document.getElementById('trade-shares').value = item.shares;
-                document.getElementById('trade-fee').value = item.fee || 0;
-                document.getElementById('total-price').value = item.total_price || 0;
-                document.getElementById('trade-date').value = item.trade_date;
+                document.getElementById('total-price').value = item.total_price;
             } else {
-                document.getElementById('modal-title').innerText = "新增紀錄";
                 document.getElementById('edit-id').value = "";
                 document.getElementById('stock-symbol').value = "";
-                document.getElementById('trade-date').valueAsDate = new Date();
             }
         }
-
-        function closeModal() { document.getElementById('addModal').classList.replace('flex', 'hidden'); }
-
-        // --- 核心邏輯 ---
+        
+        function closeModal() {
+            document.getElementById('addModal').classList.replace('flex', 'hidden');
+        }
+        
         async function handleSave() {
             const id = document.getElementById('edit-id').value;
             const payload = {
                 symbol: document.getElementById('stock-symbol').value.toUpperCase(),
                 shares: parseInt(document.getElementById('trade-shares').value),
-                fee: parseFloat(document.getElementById('trade-fee').value),
                 total_price: parseFloat(document.getElementById('total-price').value),
                 trade_date: document.getElementById('trade-date').value
             };
-
+        
             const { error } = id 
                 ? await _supabase.from('holdings').update(payload).eq('id', id)
                 : await _supabase.from('holdings').insert([payload]);
-
-            if (error) alert(error.message);
-            else { closeModal(); loadDetailData(); }
+        
+            if (!error) { closeModal(); loadDetailData(); }
         }
-
+        
         async function deleteStock(id) {
             if (confirm('確定刪除？')) {
                 await _supabase.from('holdings').delete().eq('id', id);
                 loadDetailData();
             }
         }
-
-        async function updateAssetsTotal(total) {
-            await _supabase.from('assets').update({ total_amount: total }).eq('id', 1);
-            document.getElementById('total-assets').innerText = `$ ${total.toLocaleString()}`;
-        }
-
+        
+        // 初始載入
         loadDetailData();
     </script>
 </body>
