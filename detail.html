@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票詳細帳本</title>
+    <title>股票詳細帳本 - 編輯模式</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -27,11 +27,11 @@
             <div class="grid grid-cols-2 gap-4 mb-8">
                 <div>
                     <p class="text-xs text-gray-400">今日收益</p>
-                    <p id="daily-profit" class="text-lg font-bold">--</p>
+                    <p id="daily-profit" class="text-lg font-bold text-red-500">+$0 (0%)</p>
                 </div>
                 <div class="text-right">
                     <p class="text-xs text-gray-400">今年收益</p>
-                    <p id="yearly-profit" class="text-lg font-bold">--</p>
+                    <p id="yearly-profit" class="text-lg font-bold text-red-500">+$0 (0%)</p>
                 </div>
             </div>
 
@@ -50,10 +50,9 @@
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div class="p-4 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
                 <h3 class="font-bold text-gray-700">持股明細</h3>
-                <div class="space-x-2 text-right">
-                    <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition active:scale-95">新增</button>
-                    <button onclick="alert('編輯功能開發中')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium transition active:scale-95">編輯</button>
-                </div>
+                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold transition active:scale-95 shadow-md shadow-blue-200">
+                    + 新增持股
+                </button>
             </div>
             
             <div class="overflow-x-auto">
@@ -61,9 +60,9 @@
                     <thead class="bg-gray-50 text-gray-500">
                         <tr>
                             <th class="px-4 py-3 font-medium">股票代號</th>
-                            <th class="px-4 py-3 font-medium">持有股數</th>
+                            <th class="px-4 py-3 font-medium text-right">持有股數</th>
                             <th class="px-4 py-3 font-medium text-right">目前市值</th>
-                            <th class="px-4 py-3 font-medium text-right">收益 (%)</th>
+                            <th class="px-4 py-3 font-medium text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody id="stock-list" class="divide-y divide-gray-100">
@@ -73,10 +72,12 @@
         </div>
     </div>
 
-    <div id="addModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div id="addModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-            <h3 class="text-xl font-bold text-gray-800 mb-6">新增交易紀錄</h3>
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-6">新增交易紀錄</h3>
             
+            <input type="hidden" id="edit-id">
+
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">股票代號</label>
@@ -99,9 +100,9 @@
                     <input type="number" id="total-price" class="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0">
                 </div>
 
-                <div class="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300">
-                    <p class="text-xs text-gray-500">計算出的買賣價位：</p>
-                    <p id="calc-price" class="text-lg font-bold text-blue-600">$ 0.00</p>
+                <div class="bg-blue-50 p-3 rounded-lg border border-dashed border-blue-200">
+                    <p class="text-xs text-blue-500 font-bold uppercase tracking-wider">計算出的買賣價位</p>
+                    <p id="calc-price" class="text-xl font-black text-blue-700">$ 0.00</p>
                 </div>
 
                 <div>
@@ -111,106 +112,136 @@
             </div>
 
             <div class="flex space-x-3 mt-8">
-                <button onclick="closeModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 rounded-xl transition">Cancel</button>
-                <button onclick="handleSave()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl transition">Save</button>
+                <button onclick="closeModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition">Cancel</button>
+                <button onclick="handleSave()" id="save-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-blue-100">Save</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 1. Supabase 設定
         const SUPABASE_URL = 'https://qjfeurisdvhalxjgfmfu.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // 2. 獲取 Modal 元素 (改在函數內獲取以確保安全)
-        function getModal() {
-            return document.getElementById('addModal');
+        // --- 視窗控制 ---
+        function openModal(editData = null) {
+            const modal = document.getElementById('addModal');
+            modal.classList.replace('hidden', 'flex');
+            
+            if (editData) {
+                // 進入編輯模式
+                document.getElementById('modal-title').innerText = "編輯交易紀錄";
+                document.getElementById('edit-id').value = editData.id;
+                document.getElementById('stock-symbol').value = editData.symbol;
+                document.getElementById('trade-shares').value = editData.shares;
+                document.getElementById('trade-fee').value = editData.fee || 0;
+                document.getElementById('total-price').value = editData.total_price || 0;
+                document.getElementById('trade-date').value = editData.trade_date;
+                calculatePrice();
+            } else {
+                // 進入新增模式
+                document.getElementById('modal-title').innerText = "新增交易紀錄";
+                document.getElementById('edit-id').value = "";
+                document.getElementById('stock-symbol').value = "";
+                document.getElementById('trade-shares').value = "";
+                document.getElementById('trade-fee').value = "0";
+                document.getElementById('total-price').value = "";
+                document.getElementById('trade-date').valueAsDate = new Date();
+                document.getElementById('calc-price').innerText = "$ 0.00";
+            }
         }
 
-        // 3. 開啟視窗
-        function openModal() {
-            const modal = getModal();
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            document.getElementById('trade-date').valueAsDate = new Date();
-        }
-        
-        // 4. 關閉視窗
         function closeModal() {
-            const modal = getModal();
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            document.getElementById('addModal').classList.replace('flex', 'hidden');
         }
-        
-        // 5. 自動計算價位
+
+        // --- 自動計算 ---
         function calculatePrice() {
             const shares = parseFloat(document.getElementById('trade-shares').value) || 0;
             const fee = parseFloat(document.getElementById('trade-fee').value) || 0;
             const total = parseFloat(document.getElementById('total-price').value) || 0;
-            
             if (shares > 0) {
-                const price = (total - fee) / shares;
-                document.getElementById('calc-price').innerText = `$ ${price.toFixed(2)}`;
+                document.getElementById('calc-price').innerText = `$ ${((total - fee) / shares).toFixed(2)}`;
             } else {
                 document.getElementById('calc-price').innerText = `$ 0.00`;
             }
         }
-        
-        // 6. 監聽輸入框
+
         document.getElementById('trade-shares').addEventListener('input', calculatePrice);
         document.getElementById('trade-fee').addEventListener('input', calculatePrice);
         document.getElementById('total-price').addEventListener('input', calculatePrice);
-        
-        // 7. 儲存功能
+
+        // --- 核心功能：儲存 (新增或更新) ---
         async function handleSave() {
-            const stockData = {
+            const saveBtn = document.getElementById('save-btn');
+            saveBtn.disabled = true;
+            saveBtn.innerText = "Saving...";
+
+            const id = document.getElementById('edit-id').value;
+            const payload = {
                 symbol: document.getElementById('stock-symbol').value,
-                shares: document.getElementById('trade-shares').value,
-                fee: document.getElementById('trade-fee').value,
-                total: document.getElementById('total-price').value,
-                date: document.getElementById('trade-date').value
+                shares: parseInt(document.getElementById('trade-shares').value),
+                fee: parseFloat(document.getElementById('trade-fee').value),
+                total_price: parseFloat(document.getElementById('total-price').value),
+                trade_date: document.getElementById('trade-date').value,
+                // 這裡暫時模擬市值，實際開發應串接股市API
+                market_value: parseFloat(document.getElementById('total-price').value) * 1.05 
             };
-            
-            if (!stockData.symbol || !stockData.shares) {
-                alert('請填寫完整資訊');
-                return;
+
+            let error;
+            if (id) {
+                // 更新模式
+                const { error: err } = await _supabase.from('holdings').update(payload).eq('id', id);
+                error = err;
+            } else {
+                // 新增模式
+                const { error: err } = await _supabase.from('holdings').insert([payload]);
+                error = err;
             }
 
-            console.log('準備儲存:', stockData);
-            alert(`已獲取資料：\n股票：${stockData.symbol}\n股數：${stockData.shares}\n日期：${stockData.date}\n下一步將串接資料庫寫入！`);
-            
-            closeModal();
+            if (error) {
+                alert("儲存失敗: " + error.message);
+            } else {
+                closeModal();
+                loadDetailData(); // 重新讀取表格
+            }
+            saveBtn.disabled = false;
+            saveBtn.innerText = "Save";
         }
 
-        // 8. 載入資料
+        // --- 載入資料 ---
         async function loadDetailData() {
-            const { data: assetData } = await _supabase.from('assets').select('*').single();
-            if (assetData) {
-                document.getElementById('total-assets').innerText = `$ ${assetData.total_amount.toLocaleString()}`;
+            // 1. 載入資產總覽
+            const { data: asset } = await _supabase.from('assets').select('*').single();
+            if (asset) {
+                document.getElementById('total-assets').innerText = `$ ${asset.total_amount.toLocaleString()}`;
             }
 
-            const { data: holdings } = await _supabase.from('holdings').select('*');
-            if (holdings) {
-                const listContainer = document.getElementById('stock-list');
-                listContainer.innerHTML = ''; // 清空舊資料
-                holdings.forEach(stock => {
-                    const row = `
-                        <tr class="hover:bg-gray-50 transition">
-                            <td class="px-4 py-4 font-bold text-slate-700">${stock.symbol}</td>
-                            <td class="px-4 py-4">${stock.shares.toLocaleString()}</td>
-                            <td class="px-4 py-4 text-right font-medium">$${stock.market_value.toLocaleString()}</td>
-                            <td class="px-4 py-4 text-right font-bold ${stock.profit >= 0 ? 'text-red-500' : 'text-green-500'}">
-                                ${stock.profit_percent}%
-                            </td>
-                        </tr>
-                    `;
-                    listContainer.innerHTML += row;
-                });
-            }
+            // 2. 載入持股清單
+            const { data: holdings } = await _supabase.from('holdings').select('*').order('created_at', { ascending: false });
+            const list = document.getElementById('stock-list');
+            list.innerHTML = "";
+
+            holdings?.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition";
+                tr.innerHTML = `
+                    <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
+                    <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
+                    <td class="px-4 py-4 text-right font-medium">$${item.market_value?.toLocaleString() || 0}</td>
+                    <td class="px-4 py-4 text-right">
+                        <button onclick='openEditModalById(${JSON.stringify(item)})' class="text-blue-600 font-bold hover:underline text-xs">編輯</button>
+                    </td>
+                `;
+                list.appendChild(tr);
+            });
         }
 
-        // 初始執行
+        // 輔助函式：處理點擊編輯按鈕
+        window.openEditModalById = (item) => {
+            openModal(item);
+        };
+
         loadDetailData();
     </script>
 </body>
