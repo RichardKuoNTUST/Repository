@@ -90,21 +90,82 @@
         const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // --- Yahoo 價格抓取 ---
+        // --- 更加強壯的價格抓取函數 ---
         async function getLivePrice(symbol) {
+            // 這裡我們嘗試使用 corsproxy.io，它是目前對 Yahoo 支援度較高的
+            const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol.toUpperCase().trim()}`;
+            
+            // 陣列中放置多個代理，若第一個失敗可以手動切換（這裡先用最穩的一個）
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        
             try {
-                const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol.toUpperCase().trim()}`;
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-                const response = await fetch(proxyUrl);
-                const rawData = await response.json();
-                const data = JSON.parse(rawData.contents);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒內沒反應就放棄
+        
+                const response = await fetch(proxyUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+        
+                if (!response.ok) throw new Error('Proxy 伺服器異常');
+        
+                const data = await response.json();
+                const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice;
                 
-                if (data?.quoteResponse?.result?.[0]) {
-                    return data.quoteResponse.result[0].regularMarketPrice;
-                }
-                return null;
+                return price || null;
             } catch (e) {
-                return null;
+                console.warn(`無法獲取 ${symbol} 的即時價格:`, e.message);
+                return null; // 回傳 null，讓頁面顯示 N/A 或舊值
+            }
+        }
+        
+        // --- 修正後的資料載入，避免因 API 失敗導致畫面空白 ---
+        async function loadDetailData() {
+            const list = document.getElementById('stock-list');
+            
+            try {
+                const { data: holdings, error } = await _supabase
+                    .from('holdings')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+        
+                if (error) throw error;
+        
+                list.innerHTML = ""; // 清空
+                let totalMarketValue = 0;
+        
+                // 這裡我們改用 Promise.all 同步抓取所有股價，速度會快很多
+                const stockRows = await Promise.all(holdings.map(async (item) => {
+                    const livePrice = await getLivePrice(item.symbol);
+                    
+                    // 決定顯示價格與市值
+                    const hasPrice = livePrice !== null && !isNaN(livePrice);
+                    const currentVal = hasPrice ? (livePrice * item.shares) : (item.market_value || 0);
+                    totalMarketValue += currentVal;
+        
+                    return `
+                        <tr class="hover:bg-gray-50 transition border-b border-gray-50">
+                            <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
+                            <td class="px-4 py-4">
+                                ${hasPrice 
+                                    ? `<span class="text-emerald-600 font-bold">$${livePrice.toLocaleString()}</span>` 
+                                    : `<span class="text-gray-400 text-xs">暫無連線</span>`}
+                            </td>
+                            <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right font-medium">$${currentVal.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right space-x-2">
+                                <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition text-xs font-bold">編輯</button>
+                                <button onclick="deleteStock(${item.id})" class="text-red-500 hover:bg-red-50 px-2 py-1 rounded transition text-xs font-bold">刪除</button>
+                            </td>
+                        </tr>`;
+                }));
+        
+                list.innerHTML = stockRows.join('');
+                
+                // 更新上方資產與 Supabase
+                updateAssetsTotal(totalMarketValue);
+        
+            } catch (err) {
+                console.error("載入失敗:", err);
+                list.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-500">資料讀取失敗，請檢查網路或 Supabase 設定</td></tr>`;
             }
         }
 
@@ -158,35 +219,6 @@
         async function updateAssetsTotal(total) {
             await _supabase.from('assets').update({ total_amount: total }).eq('id', 1);
             document.getElementById('total-assets').innerText = `$ ${total.toLocaleString()}`;
-        }
-
-        async function loadDetailData() {
-            const { data: holdings } = await _supabase.from('holdings').select('*').order('created_at', { ascending: false });
-            const list = document.getElementById('stock-list');
-            list.innerHTML = "<tr><td colspan='5' class='p-4 text-center text-gray-400'>正在連線 Yahoo 更新現值...</td></tr>";
-            
-            let totalMarketValue = 0;
-            let rowsHtml = "";
-
-            for (const item of holdings) {
-                const livePrice = await getLivePrice(item.symbol);
-                const currentVal = livePrice ? (livePrice * item.shares) : (item.market_value || 0);
-                totalMarketValue += currentVal;
-
-                rowsHtml += `
-                    <tr class="hover:bg-gray-50 transition">
-                        <td class="px-4 py-4 font-bold">${item.symbol}</td>
-                        <td class="px-4 py-4 text-blue-600 font-bold">${livePrice ? '$'+livePrice : 'N/A'}</td>
-                        <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
-                        <td class="px-4 py-4 text-right font-medium">$${currentVal.toLocaleString()}</td>
-                        <td class="px-4 py-4 text-right space-x-2">
-                            <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 text-xs">編輯</button>
-                            <button onclick="deleteStock(${item.id})" class="text-red-500 text-xs">刪除</button>
-                        </td>
-                    </tr>`;
-            }
-            list.innerHTML = rowsHtml;
-            updateAssetsTotal(totalMarketValue);
         }
 
         loadDetailData();
