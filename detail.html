@@ -199,11 +199,12 @@
                 error = err;
             }
 
-            if (error) {
+           if (error) {
                 alert("儲存失敗: " + error.message);
             } else {
                 closeModal();
-                loadDetailData(); // 重新讀取表格
+                await updateAssetsTotal(); // <--- 這裡呼叫
+                loadDetailData(); 
             }
             saveBtn.disabled = false;
             saveBtn.innerText = "Save";
@@ -239,17 +240,41 @@
         }
 
         async function deleteStock(id) {
-            if (!confirm('確定要刪除這筆紀錄嗎？')) return;
-        
-            const { error } = await _supabase
+            if (!confirm('確定要刪除嗎？')) return;
+            const { error } = await _supabase.from('holdings').delete().eq('id', id);
+            if (!error) {
+                await updateAssetsTotal(); // <--- 這裡呼叫，刪除後總額才會變動
+                loadDetailData();
+            }
+        }
+
+        // 自動加總並更新 assets 表
+        async function updateAssetsTotal() {
+            // 1. 抓取所有持股的市值
+            const { data: stocks, error: fetchError } = await _supabase
                 .from('holdings')
-                .delete()
-                .eq('id', id);
+                .select('market_value');
         
-            if (error) {
-                alert("刪除失敗: " + error.message);
+            if (fetchError) {
+                console.error("抓取持股失敗:", fetchError);
+                return;
+            }
+        
+            // 2. 計算總額 (這裡可以加上你的初始現金，例如 100000)
+            const totalStockValue = stocks.reduce((sum, item) => sum + (item.market_value || 0), 0);
+            const totalAmount = totalStockValue; // 如果有現金，改為 totalStockValue + cash
+        
+            // 3. 更新 assets 表 (請確保你資料庫裡有一筆 id 為 1 的資料)
+            const { error: updateError } = await _supabase
+                .from('assets')
+                .update({ total_amount: totalAmount })
+                .eq('id', 1);
+        
+            if (updateError) {
+                console.error("更新資產總額失敗:", updateError);
             } else {
-                loadDetailData(); // 重新載入表格
+                // 更新當前頁面的顯示
+                document.getElementById('total-assets').innerText = `$ ${totalAmount.toLocaleString()}`;
             }
         }
 
