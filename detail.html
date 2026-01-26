@@ -47,44 +47,71 @@
         </div>
     </div>
 
-    <div id="addModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-            <h3 id="modal-title" class="text-xl font-bold mb-6">新增交易紀錄</h3>
-            <input type="hidden" id="edit-id">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">股票代號 (台股加 .TW)</label>
-                    <input type="text" id="stock-symbol" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 2357.TW">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
+    <div id="addModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800">新增交易紀錄</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+    
+            <div class="p-6 overflow-y-auto space-y-5">
+                
+                <input type="hidden" id="edit-id">
+    
+                <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium mb-1">買賣股數</label>
-                        <input type="number" id="trade-shares" class="w-full border rounded-lg px-3 py-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">股票代號</label>
+                        <input type="text" id="stock-symbol" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="例如: 2357.TW">
                     </div>
+    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">股數</label>
+                            <input type="number" id="trade-shares" oninput="calcUnitPrice()" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="0">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">交易稅費</label>
+                            <input type="number" id="trade-fee" oninput="calcUnitPrice()" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" value="0">
+                        </div>
+                    </div>
+    
                     <div>
-                        <label class="block text-sm font-medium mb-1">交易費</label>
-                        <input type="number" id="trade-fee" class="w-full border rounded-lg px-3 py-2" value="0">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">總價 (含稅費)</label>
+                        <input type="number" id="total-price" oninput="calcUnitPrice()" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="$ 0">
+                    </div>
+    
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">平均單價估算</p>
+                        <p class="text-lg font-black text-slate-700" id="calc-price">$ 0.00</p>
+                    </div>
+    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">交易日期</label>
+                        <input type="date" id="trade-date" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition">
                     </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">買賣總價錢</label>
-                    <input type="number" id="total-price" class="w-full border rounded-lg px-3 py-2">
-                </div>
-                <div class="bg-blue-50 p-3 rounded-lg">
-                    <p class="text-xs text-blue-500">計算出的價位：<span id="calc-price" class="font-bold">$ 0.00</span></p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">買賣日期</label>
-                    <input type="date" id="trade-date" class="w-full border rounded-lg px-3 py-2">
+    
+                <div id="history-section" class="pt-6 border-t border-gray-100 hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">該股歷史交易明細</h4>
+                        <span id="history-count" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">0 筆資料</span>
+                    </div>
+                    <div id="history-list" class="space-y-2">
+                        </div>
                 </div>
             </div>
-            <div class="flex space-x-3 mt-8">
-                <button onclick="closeModal()" class="flex-1 bg-gray-100 py-3 rounded-xl">Cancel</button>
-                <button onclick="handleSave()" id="save-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl">Save</button>
+    
+            <div class="p-6 border-t border-gray-50 bg-gray-50 flex space-x-3">
+                <button onclick="closeModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border border-gray-200 hover:bg-gray-100 transition">取消</button>
+                <button onclick="handleSave()" id="save-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition">儲存交易</button>
             </div>
         </div>
     </div>
-
     <script>
         // --- 1. 基本設定 ---
         const SUPABASE_URL = 'https://qjfeurisdvhalxjgfmfu.supabase.co';
@@ -135,68 +162,111 @@
         // --- 3. 畫面載入邏輯 ---
         async function loadDetailData() {
             const list = document.getElementById('stock-list');
-            list.innerHTML = "<tr><td colspan='5' class='p-8 text-center text-gray-400 animate-pulse'>連線中，請稍候...</td></tr>";
+            list.innerHTML = "<tr><td colspan='5' class='p-8 text-center text-gray-400 animate-pulse'>計算資產中...</td></tr>";
         
             try {
-                const { data: holdings, error } = await _supabase
+                const { data: allHoldings, error } = await _supabase
                     .from('holdings')
                     .select('*')
-                    .order('created_at', { ascending: false });
+                    .order('trade_date', { ascending: false });
         
                 if (error) throw error;
+        
+                // --- 核心邏輯：將資料依 symbol 分組 ---
+                const groupedData = {};
+                allHoldings.forEach(item => {
+                    if (!groupedData[item.symbol]) {
+                        groupedData[item.symbol] = {
+                            symbol: item.symbol,
+                            totalShares: 0,
+                            totalCost: 0,
+                            history: [] // 存入該支股票的所有交易紀錄
+                        };
+                    }
+                    groupedData[item.symbol].totalShares += item.shares;
+                    groupedData[item.symbol].totalCost += item.total_price;
+                    groupedData[item.symbol].history.push(item);
+                });
         
                 let tableRows = "";
                 let grandTotal = 0;
         
-                // 逐一處理每一行
-                for (const item of holdings) {
-                    const price = await getLivePrice(item.symbol);
-                    const currentVal = price ? (price * item.shares) : (item.market_value || 0);
+                // 遍歷分組後的資料
+                for (const symbol in groupedData) {
+                    const group = groupedData[symbol];
+                    const price = await getLivePrice(group.symbol);
+                    const currentVal = price ? (price * group.totalShares) : 0;
                     grandTotal += currentVal;
+        
+                    // 計算損益 % (選配)
+                    const profit = currentVal - group.totalCost;
+                    const profitPercent = group.totalCost > 0 ? ((profit / group.totalCost) * 100).toFixed(2) : 0;
         
                     tableRows += `
                         <tr class="hover:bg-gray-50 border-b border-gray-50">
-                            <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
                             <td class="px-4 py-4">
-                                ${price ? `<span class="text-emerald-600 font-bold">$${price}</span>` : `<span class="text-gray-400">連線逾時</span>`}
+                                <div class="font-bold text-slate-700">${group.symbol}</div>
+                                <div class="text-[10px] text-gray-400">共 ${group.history.length} 筆交易</div>
                             </td>
-                            <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
-                            <td class="px-4 py-4 text-right font-medium">$${currentVal.toLocaleString()}</td>
+                            <td class="px-4 py-4">
+                                ${price ? `<span class="text-emerald-600 font-bold">$${price}</span>` : `<span class="text-gray-400 italic">讀取中</span>`}
+                            </td>
+                            <td class="px-4 py-4 text-right font-medium">${group.totalShares.toLocaleString()}</td>
                             <td class="px-4 py-4 text-right">
-                                <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 font-bold text-xs hover:underline">編輯</button>
-                                <button onclick="deleteStock(${item.id})" class="text-red-400 font-bold text-xs ml-3 hover:text-red-600">刪除</button>
+                                <div class="font-bold">$${currentVal.toLocaleString()}</div>
+                                <div class="text-[10px] ${profit >= 0 ? 'text-red-500' : 'text-green-500'}">
+                                    ${profit >= 0 ? '+' : ''}${profitPercent}%
+                                </div>
+                            </td>
+                            <td class="px-4 py-4 text-right">
+                                <button onclick='openEditModal(${JSON.stringify(group)})' class="bg-slate-100 text-slate-600 px-3 py-1 rounded-md text-xs font-bold hover:bg-blue-50 hover:text-blue-600 transition">
+                                    明細 / 編輯
+                                </button>
                             </td>
                         </tr>`;
-                    
-                    // 如果有抓到新價格，順便寫回 Supabase
-                    if (price) {
-                        await _supabase.from('holdings').update({ market_value: currentVal }).eq('id', item.id);
-                    }
                 }
         
-                list.innerHTML = tableRows || "<tr><td colspan='5' class='p-4 text-center'>目前無持股紀錄</td></tr>";
-                
-                // 更新資產總覽
+                list.innerHTML = tableRows || "<tr><td colspan='5' class='p-4 text-center'>目前無持股</td></tr>";
                 document.getElementById('total-assets').innerText = `$ ${grandTotal.toLocaleString()}`;
-                await _supabase.from('assets').update({ total_amount: grandTotal }).eq('id', 1);
         
             } catch (err) {
-                list.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">系統錯誤: ${err.message}</td></tr>`;
+                console.error(err);
+                list.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">載入失敗</td></tr>`;
             }
         }
         
         // --- 4. 視窗控制與存檔 ---
-        function openModal(item = null) {
-            document.getElementById('addModal').classList.replace('hidden', 'flex');
-            if (item) {
-                document.getElementById('edit-id').value = item.id;
-                document.getElementById('stock-symbol').value = item.symbol;
-                document.getElementById('trade-shares').value = item.shares;
-                document.getElementById('total-price').value = item.total_price;
+        // 自動計算單價顯示在 Modal 上
+        function calcUnitPrice() {
+            const shares = parseFloat(document.getElementById('trade-shares').value) || 0;
+            const total = parseFloat(document.getElementById('total-price').value) || 0;
+            const fee = parseFloat(document.getElementById('trade-fee').value) || 0;
+            
+            if (shares > 0) {
+                const unitPrice = (total + fee) / shares;
+                document.getElementById('calc-price').innerText = `$ ${unitPrice.toFixed(2)}`;
             } else {
-                document.getElementById('edit-id').value = "";
-                document.getElementById('stock-symbol').value = "";
+                document.getElementById('calc-price').innerText = `$ 0.00`;
             }
+        }
+        
+        // 修正原本的 openModal 為新增模式
+        function openModal() {
+            const modal = document.getElementById('addModal');
+            modal.classList.replace('hidden', 'flex');
+            
+            // 重置所有欄位
+            document.getElementById('modal-title').innerText = "新增交易紀錄";
+            document.getElementById('edit-id').value = "";
+            document.getElementById('stock-symbol').value = "";
+            document.getElementById('trade-shares').value = "";
+            document.getElementById('trade-fee').value = "0";
+            document.getElementById('total-price').value = "";
+            document.getElementById('trade-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('calc-price').innerText = "$ 0.00";
+            
+            // 隱藏歷史區塊
+            document.getElementById('history-section').classList.add('hidden');
         }
         
         function closeModal() {
