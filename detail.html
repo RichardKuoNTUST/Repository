@@ -289,25 +289,28 @@
         async function getLivePrice(symbol) {
             try {
                 const cleanSymbol = symbol.toUpperCase().trim();
-                // 使用 allorigins 代理伺服器，這是目前最穩定的免費解決方案
+                // 使用 allorigins 代理
                 const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${cleanSymbol}`;
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
                 
                 const response = await fetch(proxyUrl);
-                if (!response.ok) throw new Error('代理伺服器回應錯誤');
+                if (!response.ok) return null;
                 
                 const rawData = await response.json();
-                // AllOrigins 會把結果包在 .contents 字串裡，需要 JSON.parse
+                // 如果 contents 為空，直接返回
+                if (!rawData.contents) return null;
+        
                 const data = JSON.parse(rawData.contents);
                 
-                const result = data.quoteResponse.result[0];
-                
-                if (result && result.regularMarketPrice) {
-                    return result.regularMarketPrice;
+                // 關鍵修正：層層檢查結構是否存在，避免 reading 'result' of undefined
+                if (data && data.quoteResponse && data.quoteResponse.result && data.quoteResponse.result.length > 0) {
+                    const result = data.quoteResponse.result[0];
+                    return result.regularMarketPrice || null;
                 }
+                
                 return null;
             } catch (e) {
-                console.error("Yahoo 抓取失敗:", e);
+                console.error("Yahoo 抓取失敗 (" + symbol + "):", e);
                 return null;
             }
         }
@@ -315,11 +318,7 @@
         // --- loadDetailData 部分保持與上次修正版一致 ---
         async function loadDetailData() {
             const { data: holdings, error } = await _supabase.from('holdings').select('*').order('created_at', { ascending: false });
-            
-            if (error) {
-                console.error("讀取 Supabase 失敗:", error);
-                return;
-            }
+            if (error) return;
         
             const list = document.getElementById('stock-list');
             list.innerHTML = "";
@@ -327,25 +326,26 @@
             for (const item of holdings) {
                 const livePrice = await getLivePrice(item.symbol);
                 
-                // 這裡做嚴謹的判斷
                 let displayPrice, currentMarketValue;
-            
-                if (livePrice !== null && !isNaN(livePrice)) {
-                    displayPrice = `$ ${Number(livePrice).toLocaleString()}`;
+        
+                // 判斷抓到的價格是否為有效數字
+                if (livePrice !== null && typeof livePrice === 'number') {
+                    displayPrice = `<span class="text-blue-600 font-bold">$ ${livePrice.toLocaleString()}</span>`;
                     currentMarketValue = livePrice * (item.shares || 0);
                     
-                    // 抓到新價格，順便更新資料庫
+                    // 更新資料庫中的市值
                     await _supabase.from('holdings').update({ market_value: currentMarketValue }).eq('id', item.id);
                 } else {
-                    displayPrice = '讀取中...'; // 或顯示 '暫無資料'
-                    currentMarketValue = item.market_value || 0; // 抓不到就用舊的
+                    // 抓不到時的優雅處理
+                    displayPrice = `<span class="text-gray-400">N/A</span>`;
+                    currentMarketValue = item.market_value || 0; 
                 }
-                
+        
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 transition";
                 tr.innerHTML = `
                     <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
-                    <td class="px-4 py-4 text-blue-600 font-semibold">${displayPrice}</td>
+                    <td class="px-4 py-4">${displayPrice}</td>
                     <td class="px-4 py-4 text-right">${(item.shares || 0).toLocaleString()}</td>
                     <td class="px-4 py-4 text-right font-medium">$ ${currentMarketValue.toLocaleString()}</td>
                     <td class="px-4 py-4 text-right space-x-2">
@@ -355,8 +355,6 @@
                 `;
                 list.appendChild(tr);
             }
-            
-            // 更新主畫面資產
             await updateAssetsTotal();
         }
 
