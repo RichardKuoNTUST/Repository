@@ -91,29 +91,29 @@
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // --- 更加強壯的價格抓取函數 ---
+        const FINMIND_TOKEN = '	
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yNiAxNTo1MjowNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi43LjU0In0.QvrnRVyRyHA4i_u7SV2enOrk3RpcoKuG7V3rUkqSv88';
+        
         async function getLivePrice(symbol) {
-            // 這裡我們嘗試使用 corsproxy.io，它是目前對 Yahoo 支援度較高的
-            const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol.toUpperCase().trim()}`;
-            
-            // 陣列中放置多個代理，若第一個失敗可以手動切換（這裡先用最穩的一個）
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒內沒反應就放棄
-        
-                const response = await fetch(proxyUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
-        
-                if (!response.ok) throw new Error('Proxy 伺服器異常');
-        
-                const data = await response.json();
-                const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice;
+                // FinMind 不需要加 .TW，只需要號碼 (例如 2357)
+                const stockId = symbol.split('.')[0]; 
                 
-                return price || null;
+                // 使用 FinMind 的資料接口
+                const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&token=${FINMIND_TOKEN}`;
+                
+                const response = await fetch(url);
+                const json = await response.json();
+        
+                // 取得最後一筆成交價 (Close)
+                if (json.data && json.data.length > 0) {
+                    const lastData = json.data[json.data.length - 1];
+                    return lastData.close;
+                }
+                return null;
             } catch (e) {
-                console.warn(`無法獲取 ${symbol} 的即時價格:`, e.message);
-                return null; // 回傳 null，讓頁面顯示 N/A 或舊值
+                console.error("FinMind 抓取失敗:", e);
+                return null;
             }
         }
         
