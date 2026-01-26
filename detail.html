@@ -229,12 +229,28 @@
                     <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
                     <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
                     <td class="px-4 py-4 text-right font-medium">$${item.market_value?.toLocaleString() || 0}</td>
-                    <td class="px-4 py-4 text-right">
+                    <td class="px-4 py-4 text-right space-x-2">
                         <button onclick='openEditModalById(${JSON.stringify(item)})' class="text-blue-600 font-bold hover:underline text-xs">編輯</button>
+                        <button onclick="deleteStock(${item.id})" class="text-red-500 font-bold hover:underline text-xs">刪除</button>
                     </td>
                 `;
                 list.appendChild(tr);
             });
+        }
+
+        async function deleteStock(id) {
+            if (!confirm('確定要刪除這筆紀錄嗎？')) return;
+        
+            const { error } = await _supabase
+                .from('holdings')
+                .delete()
+                .eq('id', id);
+        
+            if (error) {
+                alert("刪除失敗: " + error.message);
+            } else {
+                loadDetailData(); // 重新載入表格
+            }
         }
 
         // 輔助函式：處理點擊編輯按鈕
