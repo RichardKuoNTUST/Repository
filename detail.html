@@ -94,25 +94,40 @@
         
         // --- 2. 抓取股價 (FinMind 版) ---
         async function getLivePrice(symbol) {
-            if (FINMIND_TOKEN === 'YOUR_FINMIND_TOKEN') {
-                console.warn("尚未設定 FinMind Token");
+            // 檢查 Token 是否真的有被讀取
+            if (!FINMIND_TOKEN || FINMIND_TOKEN.includes('YOUR_')) {
+                console.error("Token 尚未正確設定");
                 return null;
             }
+        
             try {
-                // 取得純數字代號 (例如 2357.TW -> 2357)
                 const stockId = symbol.split('.')[0]; 
-                const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&token=${FINMIND_TOKEN}`;
+                const date = new Date();
+                date.setDate(date.getDate() - 5);
+                const startDate = date.toISOString().split('T')[0];
+        
+                const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FINMIND_TOKEN}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
+        
+                const response = await fetch(proxyUrl);
+                const rawData = await response.json();
                 
-                const response = await fetch(url);
-                const json = await response.json();
+                // 增加一個判斷：確認 contents 是否存在
+                if (!rawData.contents) {
+                    console.error("代理伺服器未回傳內容");
+                    return null;
+                }
+        
+                const json = JSON.parse(rawData.contents);
         
                 if (json.data && json.data.length > 0) {
-                    // 取得最新一筆成交價
                     return json.data[json.data.length - 1].close;
                 }
+                
+                console.warn(`${symbol} 找不到股價資料`);
                 return null;
             } catch (e) {
-                console.error("FinMind 連線失敗:", e);
+                console.error("抓取失敗詳細原因:", e);
                 return null;
             }
         }
@@ -120,7 +135,7 @@
         // --- 3. 畫面載入邏輯 ---
         async function loadDetailData() {
             const list = document.getElementById('stock-list');
-            list.innerHTML = "<tr><td colspan='5' class='p-4 text-center text-gray-400'>讀取中...</td></tr>";
+            list.innerHTML = "<tr><td colspan='5' class='p-8 text-center text-gray-400 animate-pulse'>連線中，請稍候...</td></tr>";
         
             try {
                 const { data: holdings, error } = await _supabase
@@ -130,43 +145,43 @@
         
                 if (error) throw error;
         
-                list.innerHTML = ""; 
-                let totalMarketValue = 0;
+                let tableRows = "";
+                let grandTotal = 0;
         
+                // 逐一處理每一行
                 for (const item of holdings) {
-                    const livePrice = await getLivePrice(item.symbol);
-                    const hasPrice = (livePrice !== null);
-                    const currentVal = hasPrice ? (livePrice * item.shares) : (item.market_value || 0);
-                    totalMarketValue += currentVal;
+                    const price = await getLivePrice(item.symbol);
+                    const currentVal = price ? (price * item.shares) : (item.market_value || 0);
+                    grandTotal += currentVal;
         
-                    const tr = document.createElement('tr');
-                    tr.className = "hover:bg-gray-50 transition border-b border-gray-50";
-                    tr.innerHTML = `
-                        <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
-                        <td class="px-4 py-4">
-                            ${hasPrice ? `<span class="text-emerald-600 font-bold">$${livePrice}</span>` : `<span class="text-gray-400 text-xs">Token未設定</span>`}
-                        </td>
-                        <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
-                        <td class="px-4 py-4 text-right font-medium">$${currentVal.toLocaleString()}</td>
-                        <td class="px-4 py-4 text-right">
-                            <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 font-bold text-xs">編輯</button>
-                            <button onclick="deleteStock(${item.id})" class="text-red-500 font-bold text-xs ml-2">刪除</button>
-                        </td>
-                    `;
-                    list.appendChild(tr);
-        
-                    if (hasPrice) {
+                    tableRows += `
+                        <tr class="hover:bg-gray-50 border-b border-gray-50">
+                            <td class="px-4 py-4 font-bold text-slate-700">${item.symbol}</td>
+                            <td class="px-4 py-4">
+                                ${price ? `<span class="text-emerald-600 font-bold">$${price}</span>` : `<span class="text-gray-400">連線逾時</span>`}
+                            </td>
+                            <td class="px-4 py-4 text-right">${item.shares.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right font-medium">$${currentVal.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right">
+                                <button onclick='openModal(${JSON.stringify(item)})' class="text-blue-600 font-bold text-xs hover:underline">編輯</button>
+                                <button onclick="deleteStock(${item.id})" class="text-red-400 font-bold text-xs ml-3 hover:text-red-600">刪除</button>
+                            </td>
+                        </tr>`;
+                    
+                    // 如果有抓到新價格，順便寫回 Supabase
+                    if (price) {
                         await _supabase.from('holdings').update({ market_value: currentVal }).eq('id', item.id);
                     }
                 }
+        
+                list.innerHTML = tableRows || "<tr><td colspan='5' class='p-4 text-center'>目前無持股紀錄</td></tr>";
                 
-                // 更新上方資產顯示與資料庫
-                document.getElementById('total-assets').innerText = `$ ${totalMarketValue.toLocaleString()}`;
-                await _supabase.from('assets').update({ total_amount: totalMarketValue }).eq('id', 1);
+                // 更新資產總覽
+                document.getElementById('total-assets').innerText = `$ ${grandTotal.toLocaleString()}`;
+                await _supabase.from('assets').update({ total_amount: grandTotal }).eq('id', 1);
         
             } catch (err) {
-                console.error("載入失敗:", err);
-                list.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">連線失敗</td></tr>`;
+                list.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">系統錯誤: ${err.message}</td></tr>`;
             }
         }
         
