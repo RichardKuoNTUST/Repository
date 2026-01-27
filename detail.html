@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票詳細帳本</title>
+    <title>股票詳細帳本 - 專業版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -20,7 +20,7 @@
 
     <div class="max-w-4xl mx-auto space-y-6">
         <div class="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-            <h2 class="text-gray-400 text-xs font-bold tracking-widest uppercase mb-2">目前總資產</h2>
+            <h2 class="text-gray-400 text-xs font-bold tracking-widest uppercase mb-2">目前總市值</h2>
             <div class="text-3xl font-black text-slate-800" id="total-assets">$ 0</div>
         </div>
 
@@ -32,54 +32,17 @@
                     <button onclick="openModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md active:scale-95 transition">+ 新增買賣</button>
                 </div>
             </div>
-            
-            <div id="dividendModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-[60] backdrop-blur-sm">
-                <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
-                    <div class="p-6 border-b border-gray-100 bg-emerald-50">
-                        <h3 class="text-xl font-bold text-emerald-800">新增股利紀錄</h3>
-                    </div>
-                    
-                    <div class="p-6 space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">選擇股票</label>
-                            <select id="div-stock-symbol" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
-                                </select>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">股利金額</label>
-                                <input type="number" id="div-amount" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">匯費/手續費</label>
-                                <input type="number" id="div-fee" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500" value="10">
-                            </div>
-                        </div>
-            
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">除息/發放日期</label>
-                            <input type="date" id="div-date" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500">
-                        </div>
-                    </div>
-            
-                    <div class="p-6 bg-gray-50 flex space-x-3">
-                        <button onclick="closeDividendModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border border-gray-200 hover:bg-gray-100">Cancel</button>
-                        <button onclick="handleSaveDividend()" class="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-emerald-600 active:scale-95 transition">Save</button>
-                    </div>
-                </div>
-            </div>
-            
+
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead class="bg-gray-50 text-gray-500">
                         <tr>
-                            <th class="px-4 py-4 font-medium text-left">股票代號</th>
-                            <th class="px-4 py-4 font-medium text-left">即時現值/均價</th>
+                            <th class="px-4 py-4 font-medium">股票代號</th>
+                            <th class="px-4 py-4 font-medium">即時現值/均價</th>
                             <th class="px-4 py-4 font-medium text-center">持有股數</th>
                             <th class="px-4 py-4 font-medium text-right">市值/成本</th>
-                            <th class="px-4 py-4 font-medium text-right">已實現獲利(含股利)</th>
-                            <th class="px-4 py-4 font-medium text-right">未實現獲利(%)</th>
+                            <th class="px-4 py-4 font-medium text-right">已實現(含股利)</th>
+                            <th class="px-4 py-4 font-medium text-right">未實現損益</th>
                             <th class="px-4 py-4 font-medium text-right">總獲利 (%)</th>
                             <th class="px-4 py-4 font-medium text-right">操作</th>
                         </tr>
@@ -90,129 +53,51 @@
         </div>
     </div>
 
-    <div id="addModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
-        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
-                <h3 id="modal-title" class="text-xl font-bold text-slate-800">新增交易紀錄</h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-    
-            <div class="p-6 overflow-y-auto space-y-5">
-                
-                <input type="hidden" id="edit-id">
-    
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">股票代號</label>
-                        <input type="text" id="stock-symbol" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="例如: 2357.TW">
-                    </div>
-    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">股數</label>
-                            <input type="number" id="trade-shares" oninput="calcUnitPrice()" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="0">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">交易稅費</label>
-                            <input type="number" id="trade-fee" oninput="calcUnitPrice()" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" value="0">
-                        </div>
-                    </div>
-    
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">總價 (含稅費)</label>
-                        <input type="number" id="total-price" oninput="calcUnitPrice()" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="$ 0">
-                    </div>
-    
-                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">平均單價估算</p>
-                        <p class="text-lg font-black text-slate-700" id="calc-price">$ 0.00</p>
-                    </div>
-    
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">交易日期</label>
-                        <input type="date" id="trade-date" class="w-full border-gray-200 border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition">
-                    </div>
-                </div>
-    
-                <div id="history-section" class="pt-6 border-t border-gray-100 hidden">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">該股歷史交易明細</h4>
-                        <span id="history-count" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">0 筆資料</span>
-                    </div>
-                    <div id="history-list" class="space-y-2">
-                        </div>
-                </div>
-            </div>
-    
-            <div class="p-6 border-t border-gray-50 bg-gray-50 flex space-x-3">
-                <button onclick="closeModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border border-gray-200 hover:bg-gray-100 transition">取消</button>
-                <button onclick="handleSave()" id="save-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition">儲存交易</button>
-            </div>
-        </div>
-    </div>
     <script>
-        // --- 1. 基本設定 ---
         const SUPABASE_URL = 'https://qjfeurisdvhalxjgfmfu.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy'; // 這是你的 Key
-        const FINMIND_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yNiAxNTo1MjowNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi43LjU0In0.QvrnRVyRyHA4i_u7SV2enOrk3RpcoKuG7V3rUkqSv88'; // <--- 請在此處貼上你的 FinMind Token
+        const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy';
+        const FINMIND_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yNiAxNTo1MjowNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi43LjU0In0.QvrnRVyRyHA4i_u7SV2enOrk3RpcoKuG7V3rUkqSv88';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        
-        // --- 2. 抓取股價 (FinMind 版) ---
+
+        // --- 1. 抓取股價邏輯 ---
         async function getLivePrice(symbol) {
-            if (!FINMIND_TOKEN || FINMIND_TOKEN.includes('YOUR_')) return null;
-        
             const stockId = symbol.split('.')[0];
-            const cacheKey = `price_info_${stockId}`; // 統一使用資訊物件快取
+            const cacheKey = `price_info_${stockId}`;
             const now = new Date();
             
-            // 1. 判斷是否為「非交易時間」
+            // 交易時間判斷
             const day = now.getDay(); 
             const hour = now.getHours();
             const min = now.getMinutes();
             const isWeekend = (day === 0 || day === 6);
             const isClosedTime = (hour < 9 || (hour === 13 && min > 31) || hour > 13);
             
-            // 2. 如果是收盤時間，嘗試讀取快取
             if (isWeekend || isClosedTime) {
                 const cached = localStorage.getItem(cacheKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    return parsed.data; // 回傳 { price, changePercent }
-                }
+                if (cached) return JSON.parse(cached).data;
             }
-        
-            // 3. 呼叫 API
+
             try {
                 const date = new Date();
-                date.setDate(date.getDate() - 10); // 抓10天確保跨過連假
+                date.setDate(date.getDate() - 10);
                 const startDate = date.toISOString().split('T')[0];
                 const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FINMIND_TOKEN}`;
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
-        
+
                 const response = await fetch(proxyUrl);
                 const rawData = await response.json();
                 const json = JSON.parse(rawData.contents);
-        
-                // ... 在 getLivePrice 的 API 成功解析處 ...
+
                 if (json.data && json.data.length >= 2) {
                     const latest = json.data[json.data.length - 1].close;
                     const prev = json.data[json.data.length - 2].close;
                     
-                    const changeAmount = (latest - prev).toFixed(2); // 計算漲跌塊數
-                    const changePercent = ((latest - prev) / prev * 100).toFixed(2);
-                    
                     const result = { 
                         price: latest, 
-                        changeAmount: changeAmount, // 新增這行
-                        changePercent: changePercent 
+                        changeAmount: (latest - prev).toFixed(2),
+                        changePercent: (((latest - prev) / prev) * 100).toFixed(2)
                     };
                     
-                    // 存入快取並回傳 result ...
                     localStorage.setItem(cacheKey, JSON.stringify({ data: result, time: now.toLocaleString() }));
                     return result;
                 }
@@ -222,68 +107,40 @@
                 const backup = localStorage.getItem(cacheKey);
                 return backup ? JSON.parse(backup).data : null;
             }
-
-            // ... API 抓取成功後 ...
-            const latest = json.data[json.data.length - 1].close;
-            const prev = json.data[json.data.length - 2].close;
-            
-            // 計算漲跌點數與百分比
-            const diff = (latest - prev).toFixed(2); 
-            const percent = ((latest - prev) / prev * 100).toFixed(2);
-            
-            const result = { 
-                price: latest, 
-                changeAmount: diff,   // 確保有這一行
-                changePercent: percent 
-            };
-            
         }
-        
-         // --- 3. 畫面載入邏輯 (修正 HTML 拼接與變數錯誤) ---
+
+        // --- 2. 核心渲染邏輯 ---
         async function loadDetailData() {
             const list = document.getElementById('stock-list');
             const totalAssetsDisplay = document.getElementById('total-assets');
-            
-            list.innerHTML = "<tr><td colspan='8' class='p-12 text-center text-gray-400 animate-pulse font-medium'>正在計算精準損益與 FIFO 沖銷...</td></tr>";
-        
+            list.innerHTML = "<tr><td colspan='8' class='p-12 text-center text-gray-400 animate-pulse font-medium'>正在計算精準損益...</td></tr>";
+
             try {
                 const [holdingsRes, dividendsRes] = await Promise.all([
                     _supabase.from('holdings').select('*').order('trade_date', { ascending: true }),
                     _supabase.from('dividends').select('*')
                 ]);
-        
+
                 if (holdingsRes.error) throw holdingsRes.error;
-                const allHoldings = holdingsRes.data;
-                const allDividends = dividendsRes.data || [];
-        
                 const groupedData = {};
-        
-                allHoldings.forEach(item => {
+
+                // FIFO 損益算法與持股分類
+                holdingsRes.data.forEach(item => {
                     const symbol = item.symbol;
                     if (!groupedData[symbol]) {
-                        groupedData[symbol] = {
-                            symbol: symbol,
-                            buys: [],
-                            totalShares: 0,
-                            realizedProfit: 0
-                        };
+                        groupedData[symbol] = { symbol, buys: [], totalShares: 0, realizedProfit: 0 };
                     }
-        
                     const group = groupedData[symbol];
                     const shares = parseFloat(item.shares);
                     const totalPrice = parseFloat(item.total_price);
-        
+
                     if (shares > 0) { 
-                        group.buys.push({
-                            remainingShares: shares,
-                            pricePerShare: totalPrice / shares
-                        });
+                        group.buys.push({ remainingShares: shares, pricePerShare: totalPrice / shares });
                         group.totalShares += shares;
                     } else if (shares < 0) {
                         let sellQty = Math.abs(shares);
                         const sellPricePerShare = totalPrice / sellQty;
                         group.totalShares -= sellQty;
-        
                         while (sellQty > 0 && group.buys.length > 0) {
                             let firstBuy = group.buys[0];
                             if (firstBuy.remainingShares <= sellQty) {
@@ -298,60 +155,50 @@
                         }
                     }
                 });
-        
+
                 let tableRows = "";
                 let grandTotalMarketValue = 0;
-        
+
                 for (const symbol in groupedData) {
                     const group = groupedData[symbol];
-                    
-                    // 抓取價格物件
                     const priceInfo = await getLivePrice(symbol);
+                    
+                    // 關鍵修正：確保變數有值，預防 undefined
                     const price = priceInfo ? priceInfo.price : null;
-                    const changeAmount = priceInfo ? priceInfo.changeAmount : 0; // 新增
-                    const changePercent = priceInfo ? priceInfo.changePercent : 0;
-
                     const changeAmount = priceInfo ? (priceInfo.changeAmount || 0) : 0;
                     const changePercent = priceInfo ? (priceInfo.changePercent || 0) : 0;
-        
+
                     const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
                     const avgPrice = group.totalShares > 0 ? (currentRemainingCost / group.totalShares) : 0;
                     const marketVal = price ? (price * group.totalShares) : 0;
                     
-                    const stockDividends = allDividends
+                    const stockDividends = (dividendsRes.data || [])
                         .filter(d => d.symbol === symbol)
                         .reduce((sum, d) => sum + (parseFloat(d.amount) - parseFloat(d.fee || 0)), 0);
-        
-                    // 稅費預扣
+
                     const estimatedSellCost = marketVal * (0.003 + 0.001425);
                     const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentRemainingCost - estimatedSellCost) : 0;
                     const unrealizedPercent = currentRemainingCost > 0 ? (unrealizedProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
-        
+
                     const totalRealized = group.realizedProfit + stockDividends;
                     const totalProfit = unrealizedProfit + totalRealized;
                     const totalPercent = currentRemainingCost > 0 ? (totalProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
-        
+
                     grandTotalMarketValue += marketVal;
-        
+
+                    // 顏色判定
                     const dailyColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
-                    const dailySign = changePercent >= 0 ? '+' : ''; // 跌幅本身自帶負號，漲幅手動加正號
+                    const dailySign = changePercent >= 0 ? '+' : ''; 
                     const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
                     const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
-        
-                    // ⚠️ 修正此處的 HTML 字串拼接 ⚠️
+
                     tableRows += `
                         <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
                             <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
-                            <td class="px-4 py-4 text-left">
+                            <td class="px-4 py-4">
                                 <div class="flex items-baseline space-x-1">
-                                    <span class="text-emerald-600 font-bold">
-                                        ${price ? '$' + price.toLocaleString() : '---'}
-                                    </span>
-                                    ${price ? `
-                                        <span class="${dailyColor} text-[10px] font-bold">
-                                            (${dailySign}${changeAmount} ${dailySign}${changePercent}%)
-                                        </span>
-                                    ` : ''}
+                                    <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
+                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">(${dailySign}${changeAmount} ${dailySign}${changePercent}%)</span>` : ''}
                                 </div>
                                 <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
@@ -370,145 +217,20 @@
                                 <div class="${totalColor} text-[10px] font-bold">${totalProfit >= 0 ? '▲' : '▼'} ${totalPercent}%</div>
                             </td>
                             <td class="px-4 py-4 text-right">
-                                <button onclick='openEditModal(${JSON.stringify(group)})' 
-                                    class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition">
-                                    明細
-                                </button>
+                                <button onclick='openEditModal(${JSON.stringify(group)})' class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition">明細</button>
                             </td>
                         </tr>`;
                 }
-        
-                list.innerHTML = tableRows || "<tr><td colspan='8' class='p-8 text-center'>尚無持股紀錄，請點擊新增</td></tr>";
+
+                list.innerHTML = tableRows || "<tr><td colspan='8' class='p-8 text-center'>尚無持股紀錄</td></tr>";
                 totalAssetsDisplay.innerText = `$ ${Math.round(grandTotalMarketValue).toLocaleString()}`;
-        
+
             } catch (err) {
                 console.error("載入失敗:", err);
-                list.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-bold">資料庫連線失敗: ${err.message}</td></tr>`;
-            }
-        }
-        // --- 4. 視窗控制與存檔 ---
-        // 自動計算單價顯示在 Modal 上
-        function calcUnitPrice() {
-            const shares = parseFloat(document.getElementById('trade-shares').value) || 0;
-            const total = parseFloat(document.getElementById('total-price').value) || 0;
-            const fee = parseFloat(document.getElementById('trade-fee').value) || 0;
-            
-            if (shares > 0) {
-                const unitPrice = (total + fee) / shares;
-                document.getElementById('calc-price').innerText = `$ ${unitPrice.toFixed(2)}`;
-            } else {
-                document.getElementById('calc-price').innerText = `$ 0.00`;
-            }
-        }
-        
-        // 修正原本的 openModal 為新增模式
-        function openModal() {
-            const modal = document.getElementById('addModal');
-            modal.classList.replace('hidden', 'flex');
-            
-            // 重置所有欄位
-            document.getElementById('modal-title').innerText = "新增交易紀錄";
-            document.getElementById('edit-id').value = "";
-            document.getElementById('stock-symbol').value = "";
-            document.getElementById('trade-shares').value = "";
-            document.getElementById('trade-fee').value = "0";
-            document.getElementById('total-price').value = "";
-            document.getElementById('trade-date').value = new Date().toISOString().split('T')[0];
-            document.getElementById('calc-price').innerText = "$ 0.00";
-            
-            // 隱藏歷史區塊
-            document.getElementById('history-section').classList.add('hidden');
-        }
-        
-        function closeModal() {
-            document.getElementById('addModal').classList.replace('flex', 'hidden');
-        }
-        
-        async function handleSave() {
-            const id = document.getElementById('edit-id').value;
-            const payload = {
-                symbol: document.getElementById('stock-symbol').value.toUpperCase(),
-                shares: parseInt(document.getElementById('trade-shares').value),
-                total_price: parseFloat(document.getElementById('total-price').value),
-                trade_date: document.getElementById('trade-date').value
-            };
-        
-            const { error } = id 
-                ? await _supabase.from('holdings').update(payload).eq('id', id)
-                : await _supabase.from('holdings').insert([payload]);
-        
-            if (!error) { closeModal(); loadDetailData(); }
-        }
-        
-        async function deleteStock(id) {
-            if (confirm('確定刪除？')) {
-                await _supabase.from('holdings').delete().eq('id', id);
-                loadDetailData();
+                list.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-bold">連線失敗: ${err.message}</td></tr>`;
             }
         }
 
-        // --- 股利視窗邏輯 ---
-        async function openDividendModal() {
-            // 1. 顯示視窗
-            const modal = document.getElementById('dividendModal');
-            modal.classList.replace('hidden', 'flex');
-            
-            // 2. 初始化日期
-            document.getElementById('div-date').value = new Date().toISOString().split('T')[0];
-            
-            // 3. 抓取目前有持有的股票代號填入選單
-            try {
-                const { data: holdings, error } = await _supabase.from('holdings').select('symbol');
-                if (error) throw error;
-                
-                // 過濾重複的代號
-                const uniqueSymbols = [...new Set(holdings.map(h => h.symbol))];
-                const select = document.getElementById('div-stock-symbol');
-                
-                select.innerHTML = uniqueSymbols.map(s => 
-                    `<option value="${s}">${s}</option>`
-                ).join('') || '<option value="">無持有股票</option>';
-                
-            } catch (err) {
-                console.error("無法載入股票選單:", err);
-            }
-        }
-        
-        function closeDividendModal() {
-            document.getElementById('dividendModal').classList.replace('flex', 'hidden');
-        }
-        
-        async function handleSaveDividend() {
-            const symbol = document.getElementById('div-stock-symbol').value;
-            const amount = parseFloat(document.getElementById('div-amount').value) || 0;
-            const fee = parseFloat(document.getElementById('div-fee').value) || 0;
-            const date = document.getElementById('div-date').value;
-        
-            if (!symbol || amount <= 0) {
-                alert("請選擇股票並輸入股利金額");
-                return;
-            }
-        
-            // 實務建議：股利可以存入一個專屬的 table `dividends`
-            // 如果你還沒建 table，可以暫時先在 holdings 插入一筆「負總價」的紀錄來代表現金流入
-            // 但最佳做法是建立 `dividends` 表：id, symbol, amount, fee, date
-            
-            const { error } = await _supabase.from('dividends').insert([{
-                symbol: symbol,
-                amount: amount,
-                fee: fee,
-                pay_date: date
-            }]);
-        
-            if (!error) {
-                alert(`${symbol} 股利紀錄成功！`);
-                closeDividendModal();
-                loadDetailData(); // 重新整理表格計算獲利
-            } else {
-                alert("儲存失敗: " + error.message);
-            }
-        }
-        
         // 初始載入
         loadDetailData();
     </script>
