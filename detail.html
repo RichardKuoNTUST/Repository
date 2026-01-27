@@ -190,7 +190,7 @@
             // 3. 開市時間或無快取時，呼叫 API
             try {
                 const date = new Date();
-                date.setDate(date.getDate() - 5);
+                date.setDate(date.getDate() - 7); // 多抓幾天確保有兩筆交易日
                 const startDate = date.toISOString().split('T')[0];
                 const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FINMIND_TOKEN}`;
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
@@ -199,22 +199,25 @@
                 const rawData = await response.json();
                 const json = JSON.parse(rawData.contents);
         
-                if (json.data && json.data.length > 0) {
-                    const latestPrice = json.data[json.data.length - 1].close;
+                if (json.data && json.data.length >= 2) {
+                    const latest = json.data[json.data.length - 1].close;
+                    const prev = json.data[json.data.length - 2].close;
+                    const changePercent = ((latest - prev) / prev * 100).toFixed(2);
+                    
+                    const result = { price: latest, changePercent: changePercent };
                     
                     // 存入快取
                     localStorage.setItem(cacheKey, JSON.stringify({
-                        price: latestPrice,
-                        time: now.toLocaleString()
+                        data: result,
+                        time: new Date().toLocaleString()
                     }));
                     
-                    return latestPrice;
+                    return result;
                 }
                 return null;
             } catch (e) {
-                // API 失敗時，最後一線生機：讀取快取
                 const backup = localStorage.getItem(cacheKey);
-                return backup ? JSON.parse(backup).price : null;
+                return backup ? JSON.parse(backup).data : null;
             }
         }
         
@@ -295,8 +298,13 @@
                 for (const symbol in groupedData) {
                     const group = groupedData[symbol];
                     
-                    // 抓取股價 (優先使用快取)
-                    const price = await getLivePrice(symbol);
+                    const priceInfo = await getLivePrice(symbol);
+                    const price = priceInfo?.price;
+                    const changePercent = priceInfo?.changePercent;
+
+                    // 判定今日漲跌顏色
+                    const dailyColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
+                    const dailySign = changePercent >= 0 ? '+' : '';
                     
                     // 計算剩餘持股成本 (目前還留在 buys 裡的成本)
                     const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
@@ -331,8 +339,15 @@
                         <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
                             <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
                             <td class="px-4 py-4">
-                                <div class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</div>
-                                <div class="text-[10px] text-gray-400 font-medium">均價 $${avgPrice.toFixed(2)}</div>
+                                <div class="flex items-baseline space-x-1">
+                                    <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
+                                    ${price ? `
+                                        <span class="${dailyColor} text-[10px] font-bold">
+                                            (${dailySign}${changePercent}%)
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
                             <td class="px-4 py-4 text-center font-medium text-slate-600">${group.totalShares.toLocaleString()}</td>
                             <td class="px-4 py-4 text-right">
