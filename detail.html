@@ -74,11 +74,12 @@
                 <table class="w-full text-left text-sm">
                     <thead class="bg-gray-50 text-gray-500">
                         <tr>
-                            <th class="px-4 py-4 font-medium">股票代號</th>
-                            <th class="px-4 py-4 font-medium">即時現值 / 持有均價</th>
+                            <th class="px-4 py-4 font-medium text-left">股票代號</th>
+                            <th class="px-4 py-4 font-medium text-left">即時現值/均價</th>
                             <th class="px-4 py-4 font-medium text-center">持有股數</th>
-                            <th class="px-4 py-4 font-medium text-right">目前市值 / 持有成本</th>
-                            <th class="px-4 py-4 font-medium text-right">總股利</th>
+                            <th class="px-4 py-4 font-medium text-right">市值/成本</th>
+                            <th class="px-4 py-4 font-medium text-right">已實現獲利(含股利)</th>
+                            <th class="px-4 py-4 font-medium text-right">未實現獲利(%)</th>
                             <th class="px-4 py-4 font-medium text-right">總獲利 (%)</th>
                             <th class="px-4 py-4 font-medium text-right">操作</th>
                         </tr>
@@ -219,108 +220,103 @@
         
         // --- 3. 畫面載入邏輯 ---
         async function loadDetailData() {
-            const list = document.getElementById('stock-list');
-            list.innerHTML = "<tr><td colspan='5' class='p-8 text-center text-gray-400 animate-pulse'>計算資產中...</td></tr>";
-            // 在 loadDetailData 裡面
-            const { data: divData } = await _supabase.from('dividends').select('*');
-            
-            // 在計算每個股票的分組時
-            const stockDividends = divData
-                .filter(d => d.symbol === group.symbol)
-                .reduce((sum, d) => sum + (d.amount - d.fee), 0);
-            
-            // 最後計算：總獲利 = 目前市值 - 原始成本 + stockDividends
-            try {
-                const { data: allHoldings, error } = await _supabase
-                    .from('holdings')
-                    .select('*')
-                    .order('trade_date', { ascending: false });
+    // ... 前置作業 (撈取 holdings 與 dividends) ...       
+            const { data: allHoldings } = await _supabase.from('holdings').select('*').order('trade_date', { ascending: true });
+            const { data: allDividends } = await _supabase.from('dividends').select('*');
         
-                if (error) throw error;
+            const groupedData = {};
         
-                // --- 核心邏輯：將資料依 symbol 分組 ---
-                const groupedData = {};
-                allHoldings.forEach(item => {
-                    if (!groupedData[item.symbol]) {
-                        groupedData[item.symbol] = {
-                            symbol: item.symbol,
-                            totalShares: 0,
-                            totalCost: 0,
-                            history: [] // 存入該支股票的所有交易紀錄
-                        };
-                    }
-                    groupedData[item.symbol].totalShares += item.shares;
-                    groupedData[item.symbol].totalCost += item.total_price;
-                    groupedData[item.symbol].history.push(item);
-                });
-        
-                let tableRows = "";
-                let grandTotal = 0;
-        
-                // 遍歷分組後的資料
-                // ... 在 loadDetailData 的迴圈中 ...
-                for (const symbol in groupedData) {
-                    const group = groupedData[symbol];
-                    const price = await getLivePrice(group.symbol);
-                    
-                    // 1. 基本數據計算
-                    const avgPrice = group.totalShares > 0 ? (group.totalCost / group.totalShares) : 0;
-                    const currentMarketValue = price ? (price * group.totalShares) : 0;
-                    
-                    // 2. 股利計算 (假設你有撈取 dividends 資料表)
-                    const stockDividends = divData // divData 是從 Supabase 撈出來的所有股利紀錄
-                        .filter(d => d.symbol === group.symbol)
-                        .reduce((sum, d) => sum + (d.amount - d.fee), 0);
-                    
-                    // 3. 獲利計算
-                    const totalProfit = currentMarketValue - group.totalCost + stockDividends;
-                    const profitPercent = group.totalCost > 0 ? ((totalProfit / group.totalCost) * 100).toFixed(2) : "0.00";
-                    const statusColor = totalProfit >= 0 ? "text-red-500" : "text-green-600";
-                
-                    tableRows += `
-                        <tr class="hover:bg-gray-50 border-b border-gray-50">
-                            <td class="px-4 py-4 font-bold text-slate-700">${group.symbol}</td>
-                            
-                            <td class="px-4 py-4">
-                                <div class="text-emerald-600 font-bold">${price ? '$' + price : '---'}</div>
-                                <div class="text-xs text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
-                            </td>
-                
-                            <td class="px-4 py-4 text-center font-medium text-slate-600">
-                                ${group.totalShares.toLocaleString()}
-                            </td>
-                            
-                            <td class="px-4 py-4 text-right">
-                                <div class="font-bold text-slate-700">$${currentMarketValue.toLocaleString()}</div>
-                                <div class="text-xs text-gray-400 mt-1">成本 $${group.totalCost.toLocaleString()}</div>
-                            </td>
-                
-                            <td class="px-4 py-4 text-right text-blue-600 font-medium">
-                                $${stockDividends.toLocaleString()}
-                            </td>
-                
-                            <td class="px-4 py-4 text-right">
-                                <div class="${statusColor} font-black">$${totalProfit.toLocaleString()}</div>
-                                <div class="${statusColor} text-[10px] font-bold mt-1">
-                                    ${totalProfit >= 0 ? '▲' : '▼'} ${profitPercent}%
-                                </div>
-                            </td>
-                
-                            <td class="px-4 py-4 text-right">
-                                <button onclick='openEditModal(${JSON.stringify(group)})' 
-                                    class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition">
-                                    明細
-                                </button>
-                            </td>
-                        </tr>`;
+            allHoldings.forEach(item => {
+                if (!groupedData[item.symbol]) {
+                    groupedData[item.symbol] = { buys: [], realizedProfit: 0, totalShares: 0 };
                 }
+                
+                const group = groupedData[item.symbol];
+                if (item.shares > 0) { // 買入
+                    group.buys.push({ ...item, remaining: item.shares });
+                    group.totalShares += item.shares;
+                } else { // 賣出 (shares 為負數)
+                    let sellQty = Math.abs(item.shares);
+                    const sellPricePerShare = item.total_price / sellQty;
+                    group.totalShares -= sellQty;
         
-                list.innerHTML = tableRows || "<tr><td colspan='5' class='p-4 text-center'>目前無持股</td></tr>";
-                document.getElementById('total-assets').innerText = `$ ${grandTotal.toLocaleString()}`;
+                    // FIFO 沖銷
+                    while (sellQty > 0 && group.buys.length > 0) {
+                        let firstBuy = group.buys[0];
+                        let buyPricePerShare = firstBuy.total_price / firstBuy.shares;
+                        
+                        if (firstBuy.remaining <= sellQty) {
+                            // 這一批買入全部賣出
+                            group.realizedProfit += (sellPricePerShare - buyPricePerShare) * firstBuy.remaining;
+                            sellQty -= firstBuy.remaining;
+                            group.buys.shift();
+                        } else {
+                            // 只賣出這一批的一部分
+                            group.realizedProfit += (sellPricePerShare - buyPricePerShare) * sellQty;
+                            firstBuy.remaining -= sellQty;
+                            sellQty = 0;
+                        }
+                    }
+                }
+            });
         
-            } catch (err) {
-                console.error(err);
-                list.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">載入失敗</td></tr>`;
+            // 渲染表格
+            for (const symbol in groupedData) {
+                const group = groupedData[symbol];
+                const price = await getLivePrice(symbol);
+                
+                // --- 1. 計算持有成本 (剩餘 buys 的總額) ---
+                const currentCost = group.buys.reduce((sum, b) => sum + (b.total_price * (b.remaining / b.shares)), 0);
+                const avgPrice = group.totalShares > 0 ? currentCost / group.totalShares : 0;
+                const marketVal = price ? price * group.totalShares : 0;
+        
+                // --- 2. 計算未實現損益 (扣除預估稅費) ---
+                // 台灣規則：賣出要扣 0.3% 證交稅 + 0.1425% 手續費
+                const estimatedFee = marketVal * 0.001425;
+                const estimatedTax = marketVal * 0.003;
+                const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentCost - estimatedFee - estimatedTax) : 0;
+                const unrealizedPercent = currentCost > 0 ? (unrealizedProfit / currentCost * 100).toFixed(2) : "0.00";
+        
+                // --- 3. 計算已實現損益 (賣出利潤 + 股利) ---
+                const dividends = allDividends.filter(d => d.symbol === symbol).reduce((sum, d) => sum + (d.amount - d.fee), 0);
+                const totalRealized = group.realizedProfit + dividends;
+        
+                // --- 4. 總獲利 ---
+                const totalProfit = unrealizedProfit + totalRealized;
+                const totalPercent = currentCost > 0 ? (totalProfit / currentCost * 100).toFixed(2) : "0.00";
+        
+                // 渲染 HTML (簡化部分)
+                tableRows += `
+                    <tr class="hover:bg-gray-50 border-b">
+                        <td class="px-4 py-4 font-bold">${symbol}</td>
+                        <td class="px-4 py-4">
+                            <div class="text-emerald-600 font-bold">$${price || '---'}</div>
+                            <div class="text-xs text-gray-400">均價 $${avgPrice.toFixed(2)}</div>
+                        </td>
+                        <td class="px-4 py-4 text-center">${group.totalShares}</td>
+                        <td class="px-4 py-4 text-right">
+                            <div class="font-bold">$${marketVal.toLocaleString()}</div>
+                            <div class="text-xs text-gray-400">成本 $${Math.round(currentCost).toLocaleString()}</div>
+                        </td>
+                        <td class="px-4 py-4 text-right text-blue-600 font-medium">
+                            $${Math.round(totalRealized).toLocaleString()}
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <div class="${unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600'} font-bold">
+                                $${Math.round(unrealizedProfit).toLocaleString()}
+                            </div>
+                            <div class="text-[10px] ${unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600'}">${unrealizedPercent}%</div>
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <div class="${totalProfit >= 0 ? 'text-red-500' : 'text-green-600'} font-black">
+                                $${Math.round(totalProfit).toLocaleString()}
+                            </div>
+                            <div class="text-[10px] font-bold ${totalProfit >= 0 ? 'text-red-500' : 'text-green-600'}">${totalPercent}%</div>
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <button onclick='openEditModal(...)' class="...">明細</button>
+                        </td>
+                    </tr>`;
             }
         }
         
