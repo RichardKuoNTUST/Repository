@@ -198,19 +198,22 @@
                 const rawData = await response.json();
                 const json = JSON.parse(rawData.contents);
         
+                // ... 在 getLivePrice 的 API 成功解析處 ...
                 if (json.data && json.data.length >= 2) {
                     const latest = json.data[json.data.length - 1].close;
                     const prev = json.data[json.data.length - 2].close;
+                    
+                    const changeAmount = (latest - prev).toFixed(2); // 計算漲跌塊數
                     const changePercent = ((latest - prev) / prev * 100).toFixed(2);
                     
-                    const result = { price: latest, changePercent: changePercent };
+                    const result = { 
+                        price: latest, 
+                        changeAmount: changeAmount, // 新增這行
+                        changePercent: changePercent 
+                    };
                     
-                    // 存入快取
-                    localStorage.setItem(cacheKey, JSON.stringify({
-                        data: result,
-                        time: now.toLocaleString()
-                    }));
-                    
+                    // 存入快取並回傳 result ...
+                    localStorage.setItem(cacheKey, JSON.stringify({ data: result, time: now.toLocaleString() }));
                     return result;
                 }
                 return null;
@@ -290,6 +293,7 @@
                     // 抓取價格物件
                     const priceInfo = await getLivePrice(symbol);
                     const price = priceInfo ? priceInfo.price : null;
+                    const changeAmount = priceInfo ? priceInfo.changeAmount : 0; // 新增
                     const changePercent = priceInfo ? priceInfo.changePercent : 0;
         
                     const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
@@ -312,7 +316,7 @@
                     grandTotalMarketValue += marketVal;
         
                     const dailyColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
-                    const dailySign = changePercent >= 0 ? '+' : '';
+                    const dailySign = changePercent >= 0 ? '+' : ''; // 跌幅本身自帶負號，漲幅手動加正號
                     const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
                     const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
         
@@ -327,7 +331,7 @@
                                     </span>
                                     ${price ? `
                                         <span class="${dailyColor} text-[10px] font-bold">
-                                            (${dailySign}${changePercent}%)
+                                            (${dailySign}${changeAmount} ${dailySign}${changePercent}%)
                                         </span>
                                     ` : ''}
                                 </div>
