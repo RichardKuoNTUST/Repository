@@ -163,41 +163,57 @@
         
         // --- 2. 抓取股價 (FinMind 版) ---
         async function getLivePrice(symbol) {
-            // 檢查 Token 是否真的有被讀取
-            if (!FINMIND_TOKEN || FINMIND_TOKEN.includes('YOUR_')) {
-                console.error("Token 尚未正確設定");
-                return null;
+            if (!FINMIND_TOKEN || FINMIND_TOKEN.includes('YOUR_')) return null;
+        
+            const stockId = symbol.split('.')[0];
+            const cacheKey = `price_${stockId}`;
+            const now = new Date();
+            
+            // 1. 判斷是否為「非交易時間」
+            const day = now.getDay(); // 0 是週日, 6 是週六
+            const hour = now.getHours();
+            const min = now.getMinutes();
+            const isWeekend = (day === 0 || day === 6);
+            const isClosedTime = (hour < 9 || (hour === 13 && min > 31) || hour > 13);
+            
+            // 2. 如果是收盤時間或週末，嘗試讀取快取
+            if (isWeekend || isClosedTime) {
+                const cachedData = localStorage.getItem(cacheKey);
+                if (cachedData) {
+                    const { price, time } = JSON.parse(cachedData);
+                    console.log(`${symbol} 使用快取價格: ${price} (最後更新: ${time})`);
+                    return price;
+                }
             }
         
+            // 3. 開市時間或無快取時，呼叫 API
             try {
-                const stockId = symbol.split('.')[0]; 
                 const date = new Date();
                 date.setDate(date.getDate() - 5);
                 const startDate = date.toISOString().split('T')[0];
-        
                 const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FINMIND_TOKEN}`;
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
         
                 const response = await fetch(proxyUrl);
                 const rawData = await response.json();
-                
-                // 增加一個判斷：確認 contents 是否存在
-                if (!rawData.contents) {
-                    console.error("代理伺服器未回傳內容");
-                    return null;
-                }
-        
                 const json = JSON.parse(rawData.contents);
         
                 if (json.data && json.data.length > 0) {
-                    return json.data[json.data.length - 1].close;
+                    const latestPrice = json.data[json.data.length - 1].close;
+                    
+                    // 存入快取
+                    localStorage.setItem(cacheKey, JSON.stringify({
+                        price: latestPrice,
+                        time: now.toLocaleString()
+                    }));
+                    
+                    return latestPrice;
                 }
-                
-                console.warn(`${symbol} 找不到股價資料`);
                 return null;
             } catch (e) {
-                console.error("抓取失敗詳細原因:", e);
-                return null;
+                // API 失敗時，最後一線生機：讀取快取
+                const backup = localStorage.getItem(cacheKey);
+                return backup ? JSON.parse(backup).price : null;
             }
         }
         
