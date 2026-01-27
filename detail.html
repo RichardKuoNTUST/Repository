@@ -298,9 +298,14 @@
                 for (const symbol in groupedData) {
                     const group = groupedData[symbol];
                     
-                    const priceInfo = await getLivePrice(symbol);
-                    const price = priceInfo?.price;
-                    const changePercent = priceInfo?.changePercent;
+                    const priceInfo = await getLivePrice(symbol); // 先取得整個物件
+
+                    // 從物件中拆解出數值，如果抓不到就給 null
+                    const price = priceInfo ? priceInfo.price : null; 
+                    const changePercent = priceInfo ? priceInfo.changePercent : 0;
+                    
+                    // 下方的計算邏輯也要確保使用的是 price 這個變數
+                    const marketVal = price ? (price * group.totalShares) : 0;
 
                     // 判定今日漲跌顏色
                     const dailyColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
@@ -338,9 +343,12 @@
                     tableRows += `
                         <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
                             <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
+                            
                             <td class="px-4 py-4">
                                 <div class="flex items-baseline space-x-1">
-                                    <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
+                                    <span class="text-emerald-600 font-bold">
+                                        ${price ? '$' + price.toLocaleString() : '---'}
+                                    </span>
                                     ${price ? `
                                         <span class="${dailyColor} text-[10px] font-bold">
                                             (${dailySign}${changePercent}%)
@@ -349,6 +357,8 @@
                                 </div>
                                 <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
+                            
+                            `;
                             <td class="px-4 py-4 text-center font-medium text-slate-600">${group.totalShares.toLocaleString()}</td>
                             <td class="px-4 py-4 text-right">
                                 <div class="font-bold text-slate-800">$${Math.round(marketVal).toLocaleString()}</div>
