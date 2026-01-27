@@ -222,6 +222,21 @@
                 const backup = localStorage.getItem(cacheKey);
                 return backup ? JSON.parse(backup).data : null;
             }
+
+            // ... API 抓取成功後 ...
+            const latest = json.data[json.data.length - 1].close;
+            const prev = json.data[json.data.length - 2].close;
+            
+            // 計算漲跌點數與百分比
+            const diff = (latest - prev).toFixed(2); 
+            const percent = ((latest - prev) / prev * 100).toFixed(2);
+            
+            const result = { 
+                price: latest, 
+                changeAmount: diff,   // 確保有這一行
+                changePercent: percent 
+            };
+            
         }
         
          // --- 3. 畫面載入邏輯 (修正 HTML 拼接與變數錯誤) ---
@@ -295,6 +310,9 @@
                     const price = priceInfo ? priceInfo.price : null;
                     const changeAmount = priceInfo ? priceInfo.changeAmount : 0; // 新增
                     const changePercent = priceInfo ? priceInfo.changePercent : 0;
+
+                    const changeAmount = priceInfo ? (priceInfo.changeAmount || 0) : 0;
+                    const changePercent = priceInfo ? (priceInfo.changePercent || 0) : 0;
         
                     const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
                     const avgPrice = group.totalShares > 0 ? (currentRemainingCost / group.totalShares) : 0;
