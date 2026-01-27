@@ -219,107 +219,152 @@
         }
         
         // --- 3. 畫面載入邏輯 ---
-        async function loadDetailData() {
-    // ... 前置作業 (撈取 holdings 與 dividends) ...       
-            const { data: allHoldings } = await _supabase.from('holdings').select('*').order('trade_date', { ascending: true });
-            const { data: allDividends } = await _supabase.from('dividends').select('*');
+         async function loadDetailData() {
+            const list = document.getElementById('stock-list');
+            const totalAssetsDisplay = document.getElementById('total-assets');
+            
+            // 顯示載入中動畫
+            list.innerHTML = "<tr><td colspan='8' class='p-12 text-center text-gray-400 animate-pulse font-medium'>正在計算精準損益與 FIFO 沖銷...</td></tr>";
         
-            const groupedData = {};
+            try {
+                // 1. 同步抓取交易紀錄 (按日期排序以利 FIFO) 與 股利紀錄
+                const [holdingsRes, dividendsRes] = await Promise.all([
+                    _supabase.from('holdings').select('*').order('trade_date', { ascending: true }),
+                    _supabase.from('dividends').select('*')
+                ]);
         
-            allHoldings.forEach(item => {
-                if (!groupedData[item.symbol]) {
-                    groupedData[item.symbol] = { buys: [], realizedProfit: 0, totalShares: 0 };
-                }
-                
-                const group = groupedData[item.symbol];
-                if (item.shares > 0) { // 買入
-                    group.buys.push({ ...item, remaining: item.shares });
-                    group.totalShares += item.shares;
-                } else { // 賣出 (shares 為負數)
-                    let sellQty = Math.abs(item.shares);
-                    const sellPricePerShare = item.total_price / sellQty;
-                    group.totalShares -= sellQty;
+                if (holdingsRes.error) throw holdingsRes.error;
+                const allHoldings = holdingsRes.data;
+                const allDividends = dividendsRes.data || [];
         
-                    // FIFO 沖銷
-                    while (sellQty > 0 && group.buys.length > 0) {
-                        let firstBuy = group.buys[0];
-                        let buyPricePerShare = firstBuy.total_price / firstBuy.shares;
-                        
-                        if (firstBuy.remaining <= sellQty) {
-                            // 這一批買入全部賣出
-                            group.realizedProfit += (sellPricePerShare - buyPricePerShare) * firstBuy.remaining;
-                            sellQty -= firstBuy.remaining;
-                            group.buys.shift();
-                        } else {
-                            // 只賣出這一批的一部分
-                            group.realizedProfit += (sellPricePerShare - buyPricePerShare) * sellQty;
-                            firstBuy.remaining -= sellQty;
-                            sellQty = 0;
+                // 2. 進行分組與 FIFO 運算
+                const groupedData = {};
+        
+                allHoldings.forEach(item => {
+                    const symbol = item.symbol;
+                    if (!groupedData[symbol]) {
+                        groupedData[symbol] = {
+                            symbol: symbol,
+                            buys: [],           // 存放未賣出的買入批次
+                            totalShares: 0,
+                            realizedProfit: 0   // 已實現損益 (單純買賣價差)
+                        };
+                    }
+        
+                    const group = groupedData[symbol];
+                    const shares = parseFloat(item.shares);
+                    const totalPrice = parseFloat(item.total_price);
+        
+                    if (shares > 0) { 
+                        // --- 買入邏輯 ---
+                        group.buys.push({
+                            originalShares: shares,
+                            remainingShares: shares,
+                            totalCost: totalPrice,
+                            pricePerShare: totalPrice / shares
+                        });
+                        group.totalShares += shares;
+                    } else if (shares < 0) {
+                        // --- 賣出邏輯 (FIFO) ---
+                        let sellQty = Math.abs(shares);
+                        const sellPricePerShare = totalPrice / sellQty;
+                        group.totalShares -= sellQty;
+        
+                        while (sellQty > 0 && group.buys.length > 0) {
+                            let firstBuy = group.buys[0];
+                            if (firstBuy.remainingShares <= sellQty) {
+                                // 這一批買入全部賣完
+                                group.realizedProfit += (sellPricePerShare - firstBuy.pricePerShare) * firstBuy.remainingShares;
+                                sellQty -= firstBuy.remainingShares;
+                                group.buys.shift(); // 移除已銷帳批次
+                            } else {
+                                // 只賣出這一批的一部分
+                                group.realizedProfit += (sellPricePerShare - firstBuy.pricePerShare) * sellQty;
+                                firstBuy.remainingShares -= sellQty;
+                                sellQty = 0;
+                            }
                         }
                     }
+                });
+        
+                // 3. 準備渲染表格
+                let tableRows = "";
+                let grandTotalMarketValue = 0;
+        
+                // 遍歷每個股票群組計算現值與未實現損益
+                for (const symbol in groupedData) {
+                    const group = groupedData[symbol];
+                    
+                    // 抓取股價 (優先使用快取)
+                    const price = await getLivePrice(symbol);
+                    
+                    // 計算剩餘持股成本 (目前還留在 buys 裡的成本)
+                    const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
+                    const avgPrice = group.totalShares > 0 ? (currentRemainingCost / group.totalShares) : 0;
+                    const marketVal = price ? (price * group.totalShares) : 0;
+                    
+                    // 計算該股總股利 (扣除手續費)
+                    const stockDividends = allDividends
+                        .filter(d => d.symbol === symbol)
+                        .reduce((sum, d) => sum + (parseFloat(d.amount) - parseFloat(d.fee || 0)), 0);
+        
+                    // --- 未實現獲利計算 (預扣賣出稅費：0.3% 證交稅 + 0.1425% 手續費) ---
+                    const estimatedSellCost = marketVal * (0.003 + 0.001425);
+                    const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentRemainingCost - estimatedSellCost) : 0;
+                    const unrealizedPercent = currentRemainingCost > 0 ? (unrealizedProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
+        
+                    // --- 已實現獲利計算 (買賣價差 + 股利) ---
+                    const totalRealized = group.realizedProfit + stockDividends;
+        
+                    // --- 總獲利 (未實現 + 已實現) ---
+                    const totalProfit = unrealizedProfit + totalRealized;
+                    const totalPercent = currentRemainingCost > 0 ? (totalProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
+        
+                    // 累加總資產 (以目前市值計)
+                    grandTotalMarketValue += marketVal;
+        
+                    // 判定顏色
+                    const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
+                    const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
+        
+                    tableRows += `
+                        <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
+                            <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
+                            <td class="px-4 py-4">
+                                <div class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</div>
+                                <div class="text-[10px] text-gray-400 font-medium">均價 $${avgPrice.toFixed(2)}</div>
+                            </td>
+                            <td class="px-4 py-4 text-center font-medium text-slate-600">${group.totalShares.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right">
+                                <div class="font-bold text-slate-800">$${Math.round(marketVal).toLocaleString()}</div>
+                                <div class="text-[10px] text-gray-400">成本 $${Math.round(currentRemainingCost).toLocaleString()}</div>
+                            </td>
+                            <td class="px-4 py-4 text-right text-blue-600 font-medium">$${Math.round(totalRealized).toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right">
+                                <div class="${unColor} font-bold">$${Math.round(unrealizedProfit).toLocaleString()}</div>
+                                <div class="${unColor} text-[10px] font-bold">${unrealizedProfit >= 0 ? '▲' : '▼'} ${unrealizedPercent}%</div>
+                            </td>
+                            <td class="px-4 py-4 text-right">
+                                <div class="${totalColor} font-black text-base">$${Math.round(totalProfit).toLocaleString()}</div>
+                                <div class="${totalColor} text-[10px] font-bold">${totalProfit >= 0 ? '▲' : '▼'} ${totalPercent}%</div>
+                            </td>
+                            <td class="px-4 py-4 text-right">
+                                <button onclick='openEditModal(${JSON.stringify(group)})' 
+                                    class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition">
+                                    明細
+                                </button>
+                            </td>
+                        </tr>`;
                 }
-            });
         
-            // 渲染表格
-            for (const symbol in groupedData) {
-                const group = groupedData[symbol];
-                const price = await getLivePrice(symbol);
-                
-                // --- 1. 計算持有成本 (剩餘 buys 的總額) ---
-                const currentCost = group.buys.reduce((sum, b) => sum + (b.total_price * (b.remaining / b.shares)), 0);
-                const avgPrice = group.totalShares > 0 ? currentCost / group.totalShares : 0;
-                const marketVal = price ? price * group.totalShares : 0;
+                list.innerHTML = tableRows || "<tr><td colspan='8' class='p-8 text-center'>尚無持股紀錄，請點擊新增</td></tr>";
+                totalAssetsDisplay.innerText = `$ ${Math.round(grandTotalMarketValue).toLocaleString()}`;
         
-                // --- 2. 計算未實現損益 (扣除預估稅費) ---
-                // 台灣規則：賣出要扣 0.3% 證交稅 + 0.1425% 手續費
-                const estimatedFee = marketVal * 0.001425;
-                const estimatedTax = marketVal * 0.003;
-                const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentCost - estimatedFee - estimatedTax) : 0;
-                const unrealizedPercent = currentCost > 0 ? (unrealizedProfit / currentCost * 100).toFixed(2) : "0.00";
-        
-                // --- 3. 計算已實現損益 (賣出利潤 + 股利) ---
-                const dividends = allDividends.filter(d => d.symbol === symbol).reduce((sum, d) => sum + (d.amount - d.fee), 0);
-                const totalRealized = group.realizedProfit + dividends;
-        
-                // --- 4. 總獲利 ---
-                const totalProfit = unrealizedProfit + totalRealized;
-                const totalPercent = currentCost > 0 ? (totalProfit / currentCost * 100).toFixed(2) : "0.00";
-        
-                // 渲染 HTML (簡化部分)
-                tableRows += `
-                    <tr class="hover:bg-gray-50 border-b">
-                        <td class="px-4 py-4 font-bold">${symbol}</td>
-                        <td class="px-4 py-4">
-                            <div class="text-emerald-600 font-bold">$${price || '---'}</div>
-                            <div class="text-xs text-gray-400">均價 $${avgPrice.toFixed(2)}</div>
-                        </td>
-                        <td class="px-4 py-4 text-center">${group.totalShares}</td>
-                        <td class="px-4 py-4 text-right">
-                            <div class="font-bold">$${marketVal.toLocaleString()}</div>
-                            <div class="text-xs text-gray-400">成本 $${Math.round(currentCost).toLocaleString()}</div>
-                        </td>
-                        <td class="px-4 py-4 text-right text-blue-600 font-medium">
-                            $${Math.round(totalRealized).toLocaleString()}
-                        </td>
-                        <td class="px-4 py-4 text-right">
-                            <div class="${unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600'} font-bold">
-                                $${Math.round(unrealizedProfit).toLocaleString()}
-                            </div>
-                            <div class="text-[10px] ${unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600'}">${unrealizedPercent}%</div>
-                        </td>
-                        <td class="px-4 py-4 text-right">
-                            <div class="${totalProfit >= 0 ? 'text-red-500' : 'text-green-600'} font-black">
-                                $${Math.round(totalProfit).toLocaleString()}
-                            </div>
-                            <div class="text-[10px] font-bold ${totalProfit >= 0 ? 'text-red-500' : 'text-green-600'}">${totalPercent}%</div>
-                        </td>
-                        <td class="px-4 py-4 text-right">
-                            <button onclick='openEditModal(...)' class="...">明細</button>
-                        </td>
-                    </tr>`;
+            } catch (err) {
+                console.error("載入失敗:", err);
+                list.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-bold">資料庫連線失敗: ${err.message}</td></tr>`;
             }
         }
-        
         // --- 4. 視窗控制與存檔 ---
         // 自動計算單價顯示在 Modal 上
         function calcUnitPrice() {
