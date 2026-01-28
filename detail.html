@@ -1,12 +1,136 @@
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票詳細帳本 - 專業管理版</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script src="js/config.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/ui.js" defer></script>
+    <script src="js/main.js" defer></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 md:p-8">
 
-<script src="js/supabase-config.js" defer></script>
-<script src="js/api.js" defer></script>
-<script src="js/ui.js" defer></script>
-<script src="js/main.js" defer></script>
+    <div class="max-w-4xl mx-auto mb-6">
+        <a href="index.html" class="flex items-center text-gray-500 hover:text-blue-600 transition group">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span class="font-medium">返回資產概覽</span>
+        </a>
+    </div>
 
-<body class="bg-gray-50 p-4">
-    <div id="total-assets">...</div>
-    <table id="stock-list">...</table>
+    <div class="max-w-4xl mx-auto space-y-6">
+        <div class="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+            <h2 class="text-gray-400 text-xs font-bold tracking-widest uppercase mb-2 text-center md:text-left">目前持股市值</h2>
+            <div class="text-3xl md:text-4xl font-black text-slate-800 text-center md:text-left" id="total-assets">
+                $ 0
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-4 border-b border-gray-50 bg-gray-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h3 class="font-bold text-gray-700">持股明細錄</h3>
+                <div class="flex space-x-2 w-full md:w-auto">
+                    <button onclick="openDividendModal()" class="flex-1 md:flex-none bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-emerald-600 active:scale-95 transition">
+                        + 新增股利
+                    </button>
+                    <button onclick="openModal()" class="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition">
+                        + 新增買賣
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-50 text-gray-500">
+                        <tr class="whitespace-nowrap">
+                            <th class="px-4 py-4 font-medium">股票</th>
+                            <th class="px-4 py-4 font-medium">現值 / 均價</th>
+                            <th class="px-4 py-4 font-medium text-center">持有股數</th>
+                            <th class="px-4 py-4 font-medium text-right">市值 / 成本</th>
+                            <th class="px-4 py-4 font-medium text-right">已實現</th>
+                            <th class="px-4 py-4 font-medium text-right">未實現</th>
+                            <th class="px-4 py-4 font-medium text-right">總獲利(%)</th>
+                            <th class="px-4 py-4 font-medium text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-list" class="divide-y divide-gray-100 text-slate-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="addModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-slate-800">新增交易紀錄</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">股票代號</label>
+                    <input type="text" id="stock-symbol" class="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="例如: 2330">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">成交股數</label>
+                        <input type="number" id="trade-shares" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="買進為正, 賣出為負">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">成交總價 (含規費)</label>
+                        <input type="number" id="total-price" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="$ 0">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">交易日期</label>
+                    <input type="date" id="trade-date" class="w-full border rounded-xl px-4 py-3 outline-none">
+                </div>
+            </div>
+            <div class="p-6 bg-gray-50 flex space-x-3">
+                <button onclick="closeModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border hover:bg-gray-100 transition">取消</button>
+                <button onclick="handleSave()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-blue-700 transition">儲存交易</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dividendModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-[60] backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-gray-100 bg-emerald-50/50">
+                <h3 class="text-xl font-bold text-emerald-800 text-center">新增股利紀錄</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">選擇持有股票</label>
+                    <select id="div-stock-symbol" class="w-full border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">實領股利</label>
+                        <input type="number" id="div-amount" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">二代健保/費用</label>
+                        <input type="number" id="div-fee" class="w-full border rounded-xl px-4 py-3 outline-none" value="10">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">發放日期</label>
+                    <input type="date" id="div-date" class="w-full border rounded-xl px-4 py-3 outline-none">
+                </div>
+            </div>
+            <div class="p-6 bg-gray-50 flex space-x-3">
+                <button onclick="closeDividendModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border hover:bg-gray-100 transition">取消</button>
+                <button onclick="handleSaveDividend()" class="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-emerald-600 transition">儲存股利</button>
+            </div>
+        </div>
+    </div>
+
 </body>
+</html>
