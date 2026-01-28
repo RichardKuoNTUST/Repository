@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票詳細帳本 - 專業版</title>
+    <title>股票詳細帳本 - 完整修正版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -32,7 +32,7 @@
                     <button onclick="openModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md active:scale-95 transition">+ 新增買賣</button>
                 </div>
             </div>
-
+            
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead class="bg-gray-50 text-gray-500">
@@ -41,7 +41,7 @@
                             <th class="px-4 py-4 font-medium">即時現值/均價</th>
                             <th class="px-4 py-4 font-medium text-center">持有股數</th>
                             <th class="px-4 py-4 font-medium text-right">市值/成本</th>
-                            <th class="px-4 py-4 font-medium text-right">已實現(含股利)</th>
+                            <th class="px-4 py-4 font-medium text-right">已實現</th>
                             <th class="px-4 py-4 font-medium text-right">未實現損益</th>
                             <th class="px-4 py-4 font-medium text-right">總獲利 (%)</th>
                             <th class="px-4 py-4 font-medium text-right">操作</th>
@@ -53,36 +53,88 @@
         </div>
     </div>
 
+    <div id="addModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800">新增交易紀錄</h3>
+                <button onclick="closeModal()" class="text-gray-400">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">股票代號</label>
+                    <input type="text" id="stock-symbol" class="w-full border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 2330">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">股數</label>
+                        <input type="number" id="trade-shares" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">總價 (含稅費)</label>
+                        <input type="number" id="total-price" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="$ 0">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">交易日期</label>
+                    <input type="date" id="trade-date" class="w-full border rounded-xl px-4 py-3 outline-none">
+                </div>
+            </div>
+            <div class="p-6 bg-gray-50 flex space-x-3">
+                <button onclick="closeModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border">取消</button>
+                <button onclick="handleSave()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg">儲存交易</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dividendModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-[60] backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-gray-100 bg-emerald-50">
+                <h3 class="text-xl font-bold text-emerald-800">新增股利紀錄</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">選擇股票</label>
+                    <select id="div-stock-symbol" class="w-full border rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">股利金額</label>
+                        <input type="number" id="div-amount" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">手續費</label>
+                        <input type="number" id="div-fee" class="w-full border rounded-xl px-4 py-3 outline-none" value="10">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">發放日期</label>
+                    <input type="date" id="div-date" class="w-full border rounded-xl px-4 py-3 outline-none">
+                </div>
+            </div>
+            <div class="p-6 bg-gray-50 flex space-x-3">
+                <button onclick="closeDividendModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border">取消</button>
+                <button onclick="handleSaveDividend()" class="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-2xl shadow-lg">儲存</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://qjfeurisdvhalxjgfmfu.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_mwnLEIXigyylVI44AkDO4w_WIM_xAPy';
-        const FINMIND_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yOCAxMToyOToyNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi4zMi4yNDIifQ.26zJgMi38O2JJyJioRLvp05qZrBp8XW5N4NvnQ8s6Y8';
+        const FINMIND_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMS0yNiAxNTo1MjowNSIsInVzZXJfaWQiOiJyaWNoYXJka3VvIiwiZW1haWwiOiJrdW8wOTM3NDcyMTk0QGdtYWlsLmNvbSIsImlwIjoiMjE4LjE3Mi43LjU0In0.QvrnRVyRyHA4i_u7SV2enOrk3RpcoKuG7V3rUkqSv88';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // --- 1. 抓取股價邏輯 ---
+        // --- 1. 抓取股價 ---
         async function getLivePrice(symbol) {
             const stockId = symbol.split('.')[0];
             const cacheKey = `price_info_${stockId}`;
-            const now = new Date();
-            
-            // 交易時間判斷
-            const day = now.getDay(); 
-            const hour = now.getHours();
-            const min = now.getMinutes();
-            const isWeekend = (day === 0 || day === 6);
-            const isClosedTime = (hour < 9 || hour > 15); // 改成下午 3 點後才完全讀快取            
-            if (isWeekend || isClosedTime) {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) return JSON.parse(cached).data;
-            }
-
             try {
                 const date = new Date();
                 date.setDate(date.getDate() - 10);
                 const startDate = date.toISOString().split('T')[0];
                 const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FINMIND_TOKEN}`;
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
-
                 const response = await fetch(proxyUrl);
                 const rawData = await response.json();
                 const json = JSON.parse(rawData.contents);
@@ -90,52 +142,45 @@
                 if (json.data && json.data.length >= 2) {
                     const latest = json.data[json.data.length - 1].close;
                     const prev = json.data[json.data.length - 2].close;
-                    
                     const result = { 
                         price: latest, 
                         changeAmount: (latest - prev).toFixed(2),
                         changePercent: (((latest - prev) / prev) * 100).toFixed(2)
                     };
-                    
-                    localStorage.setItem(cacheKey, JSON.stringify({ data: result, time: now.toLocaleString() }));
+                    localStorage.setItem(cacheKey, JSON.stringify({ data: result, time: new Date().toLocaleString() }));
                     return result;
                 }
                 return null;
             } catch (e) {
-                console.error(`${symbol} 抓取失敗:`, e);
                 const backup = localStorage.getItem(cacheKey);
                 return backup ? JSON.parse(backup).data : null;
             }
         }
 
-        // --- 2. 核心渲染邏輯 ---
+        // --- 2. 核心渲染 (含符號修正) ---
         async function loadDetailData() {
             const list = document.getElementById('stock-list');
             const totalAssetsDisplay = document.getElementById('total-assets');
-            list.innerHTML = "<tr><td colspan='8' class='p-12 text-center text-gray-400 animate-pulse font-medium'>正在計算精準損益...</td></tr>";
-        
+            list.innerHTML = "<tr><td colspan='8' class='p-12 text-center text-gray-400 animate-pulse'>資料加載中...</td></tr>";
+
             try {
                 const [holdingsRes, dividendsRes] = await Promise.all([
                     _supabase.from('holdings').select('*').order('trade_date', { ascending: true }),
                     _supabase.from('dividends').select('*')
                 ]);
-        
-                if (holdingsRes.error) throw holdingsRes.error;
+
                 const groupedData = {};
-        
-                // FIFO 算法邏輯 (省略...保持與您之前一致)
                 holdingsRes.data.forEach(item => {
                     const symbol = item.symbol;
-                    if (!groupedData[symbol]) {
-                        groupedData[symbol] = { symbol, buys: [], totalShares: 0, realizedProfit: 0 };
-                    }
+                    if (!groupedData[symbol]) groupedData[symbol] = { symbol, buys: [], totalShares: 0, realizedProfit: 0 };
                     const group = groupedData[symbol];
                     const shares = parseFloat(item.shares);
                     const totalPrice = parseFloat(item.total_price);
+
                     if (shares > 0) { 
                         group.buys.push({ remainingShares: shares, pricePerShare: totalPrice / shares });
                         group.totalShares += shares;
-                    } else if (shares < 0) {
+                    } else {
                         let sellQty = Math.abs(shares);
                         const sellPricePerShare = totalPrice / sellQty;
                         group.totalShares -= sellQty;
@@ -153,18 +198,17 @@
                         }
                     }
                 });
-        
+
                 let tableRows = "";
                 let grandTotalMarketValue = 0;
-        
+
                 for (const symbol in groupedData) {
                     const group = groupedData[symbol];
                     const priceInfo = await getLivePrice(symbol);
-                    
-                    const price = priceInfo ? priceInfo.price : null;
+                    const price = priceInfo?.price || null;
                     const changeAmount = priceInfo ? (priceInfo.changeAmount || 0) : 0;
                     const changePercent = priceInfo ? (priceInfo.changePercent || 0) : 0;
-        
+
                     const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
                     const avgPrice = group.totalShares > 0 ? (currentRemainingCost / group.totalShares) : 0;
                     const marketVal = price ? (price * group.totalShares) : 0;
@@ -172,78 +216,97 @@
                     const stockDividends = (dividendsRes.data || [])
                         .filter(d => d.symbol === symbol)
                         .reduce((sum, d) => sum + (parseFloat(d.amount) - parseFloat(d.fee || 0)), 0);
-        
-                    const estimatedSellCost = marketVal * (0.003 + 0.001425);
-                    const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentRemainingCost - estimatedSellCost) : 0;
+
+                    const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentRemainingCost) : 0;
                     const unrealizedPercent = currentRemainingCost > 0 ? (unrealizedProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
-        
-                    const totalRealized = group.realizedProfit + stockDividends;
-                    const totalProfit = unrealizedProfit + totalRealized;
+                    const totalProfit = unrealizedProfit + group.realizedProfit + stockDividends;
                     const totalPercent = currentRemainingCost > 0 ? (totalProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
-        
+
                     grandTotalMarketValue += marketVal;
-        
-                    // 顏色與符號判定
-                    // --- 漲跌符號與顏色判定 ---
+
+                    // 符號判斷
                     const isUp = changePercent > 0;
                     const isDown = changePercent < 0;
                     const dailyColor = isUp ? 'text-red-500' : (isDown ? 'text-green-600' : 'text-gray-500');
                     const priceSign = isUp ? '▲' : (isDown ? '▼' : '');
-                    
-                    // 使用 Math.abs 確保數值為正，符號由 priceSign 負責
-                    const absAmount = Math.abs(changeAmount).toFixed(2);
-                    const absPercent = Math.abs(changePercent).toFixed(2);
-                    
-                    const dailySign = changePercent > 0 ? '+' : '';
-                    const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
-                    const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
-        
+
                     tableRows += `
-                        <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
-                            <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
-                            <td class="px-4 py-4 text-left">
+                        <tr class="hover:bg-gray-50 border-b transition">
+                            <td class="px-4 py-4 font-bold">${symbol}</td>
+                            <td class="px-4 py-4">
                                 <div class="flex items-baseline space-x-1">
-                                    <span class="text-emerald-600 font-bold">
-                                        ${price ? '$' + price.toLocaleString() : '---'}
-                                    </span>
-                                    ${price ? `
-                                        <span class="${dailyColor} text-[10px] font-bold">
-                                            ${priceSign}${absAmount} (${absPercent}%)
-                                        </span>
-                                    ` : ''}
+                                    <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
+                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">${priceSign}${Math.abs(changeAmount).toFixed(2)} (${Math.abs(changePercent).toFixed(2)}%)</span>` : ''}
                                 </div>
-                                <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
+                                <div class="text-[10px] text-gray-400 mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
-                            <td class="px-4 py-4 text-center font-medium text-slate-600">${group.totalShares.toLocaleString()}</td>
+                            <td class="px-4 py-4 text-center">${group.totalShares.toLocaleString()}</td>
                             <td class="px-4 py-4 text-right">
-                                <div class="font-bold text-slate-800">$${Math.round(marketVal).toLocaleString()}</div>
+                                <div class="font-bold">$${Math.round(marketVal).toLocaleString()}</div>
                                 <div class="text-[10px] text-gray-400">成本 $${Math.round(currentRemainingCost).toLocaleString()}</div>
                             </td>
-                            <td class="px-4 py-4 text-right text-blue-600 font-medium">$${Math.round(totalRealized).toLocaleString()}</td>
-                            <td class="px-4 py-4 text-right">
-                                <div class="${unColor} font-bold">$${Math.round(unrealizedProfit).toLocaleString()}</div>
-                                <div class="${unColor} text-[10px] font-bold">${unrealizedProfit >= 0 ? '▲' : '▼'} ${unrealizedPercent}%</div>
+                            <td class="px-4 py-4 text-right text-blue-600">$${Math.round(group.realizedProfit + stockDividends).toLocaleString()}</td>
+                            <td class="px-4 py-4 text-right ${unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600'}">
+                                <div class="font-bold">$${Math.round(unrealizedProfit).toLocaleString()}</div>
+                                <div class="text-[10px]">${unrealizedProfit >= 0 ? '▲' : '▼'} ${unrealizedPercent}%</div>
                             </td>
-                            <td class="px-4 py-4 text-right">
-                                <div class="${totalColor} font-black text-base">$${Math.round(totalProfit).toLocaleString()}</div>
-                                <div class="${totalColor} text-[10px] font-bold">${totalProfit >= 0 ? '▲' : '▼'} ${totalPercent}%</div>
+                            <td class="px-4 py-4 text-right ${totalProfit >= 0 ? 'text-red-500' : 'text-green-600'}">
+                                <div class="font-bold text-base">$${Math.round(totalProfit).toLocaleString()}</div>
+                                <div class="text-[10px]">${totalProfit >= 0 ? '▲' : '▼'} ${totalPercent}%</div>
                             </td>
-                            <td class="px-4 py-4 text-right">
-                                <button onclick='openEditModal(${JSON.stringify(group)})' class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition">明細</button>
-                            </td>
+                            <td class="px-4 py-4 text-right"><button class="bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold">明細</button></td>
                         </tr>`;
                 }
-        
-                list.innerHTML = tableRows || "<tr><td colspan='8' class='p-8 text-center'>尚無持股紀錄</td></tr>";
+                list.innerHTML = tableRows || "<tr><td colspan='8' class='p-8 text-center'>尚無紀錄</td></tr>";
                 totalAssetsDisplay.innerText = `$ ${Math.round(grandTotalMarketValue).toLocaleString()}`;
-        
-            } catch (err) {
-                console.error("載入失敗:", err);
-                list.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-bold">連線失敗: ${err.message}</td></tr>`;
-            }
+            } catch (err) { console.error(err); }
         }
 
-        // 初始載入
+        // --- 3. 視窗控制函式 ---
+        function openModal() {
+            document.getElementById('addModal').classList.remove('hidden');
+            document.getElementById('addModal').classList.add('flex');
+            document.getElementById('trade-date').value = new Date().toISOString().split('T')[0];
+        }
+        function closeModal() {
+            document.getElementById('addModal').classList.add('hidden');
+            document.getElementById('addModal').classList.remove('flex');
+        }
+        async function openDividendModal() {
+            document.getElementById('dividendModal').classList.remove('hidden');
+            document.getElementById('dividendModal').classList.add('flex');
+            const { data } = await _supabase.from('holdings').select('symbol');
+            const uniqueSymbols = [...new Set(data.map(h => h.symbol))];
+            document.getElementById('div-stock-symbol').innerHTML = uniqueSymbols.map(s => `<option value="${s}">${s}</option>`).join('');
+            document.getElementById('div-date').value = new Date().toISOString().split('T')[0];
+        }
+        function closeDividendModal() {
+            document.getElementById('dividendModal').classList.add('hidden');
+            document.getElementById('dividendModal').classList.remove('flex');
+        }
+
+        // --- 4. 存檔函式 ---
+        async function handleSave() {
+            const payload = {
+                symbol: document.getElementById('stock-symbol').value.toUpperCase(),
+                shares: parseInt(document.getElementById('trade-shares').value),
+                total_price: parseFloat(document.getElementById('total-price').value),
+                trade_date: document.getElementById('trade-date').value
+            };
+            await _supabase.from('holdings').insert([payload]);
+            closeModal(); loadDetailData();
+        }
+        async function handleSaveDividend() {
+            const payload = {
+                symbol: document.getElementById('div-stock-symbol').value,
+                amount: parseFloat(document.getElementById('div-amount').value),
+                fee: parseFloat(document.getElementById('div-fee').value),
+                pay_date: document.getElementById('div-date').value
+            };
+            await _supabase.from('dividends').insert([payload]);
+            closeDividendModal(); loadDetailData();
+        }
+
         loadDetailData();
     </script>
 </body>
