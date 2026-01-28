@@ -184,8 +184,8 @@
                     grandTotalMarketValue += marketVal;
         
                     // 顏色與符號判定
-                    const dailyColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
-                    const dailySign = changePercent >= 0 ? '+' : ''; 
+                    const dailyColor = changePercent > 0 ? 'text-red-500' : (changePercent < 0 ? 'text-green-600' : 'text-gray-500');
+                    const dailySign = changePercent > 0 ? '+' : '';
                     const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
                     const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
         
