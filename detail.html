@@ -70,8 +70,7 @@
             const hour = now.getHours();
             const min = now.getMinutes();
             const isWeekend = (day === 0 || day === 6);
-            const isClosedTime = (hour < 9 || (hour === 13 && min > 31) || hour > 13);
-            
+            const isClosedTime = (hour < 9 || hour > 15); // 改成下午 3 點後才完全讀快取            
             if (isWeekend || isClosedTime) {
                 const cached = localStorage.getItem(cacheKey);
                 if (cached) return JSON.parse(cached).data;
