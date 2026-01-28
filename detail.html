@@ -184,7 +184,16 @@
                     grandTotalMarketValue += marketVal;
         
                     // 顏色與符號判定
-                    const dailyColor = changePercent > 0 ? 'text-red-500' : (changePercent < 0 ? 'text-green-600' : 'text-gray-500');
+                    // --- 漲跌符號與顏色判定 ---
+                    const isUp = changePercent > 0;
+                    const isDown = changePercent < 0;
+                    const dailyColor = isUp ? 'text-red-500' : (isDown ? 'text-green-600' : 'text-gray-500');
+                    const priceSign = isUp ? '▲' : (isDown ? '▼' : '');
+                    
+                    // 使用 Math.abs 確保數值為正，符號由 priceSign 負責
+                    const absAmount = Math.abs(changeAmount).toFixed(2);
+                    const absPercent = Math.abs(changePercent).toFixed(2);
+                    
                     const dailySign = changePercent > 0 ? '+' : '';
                     const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
                     const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
@@ -194,8 +203,14 @@
                             <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
                             <td class="px-4 py-4 text-left">
                                 <div class="flex items-baseline space-x-1">
-                                    <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
-                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">${dailySign}${changeAmount} (${dailySign}${changePercent}%)</span>` : ''}
+                                    <span class="text-emerald-600 font-bold">
+                                        ${price ? '$' + price.toLocaleString() : '---'}
+                                    </span>
+                                    ${price ? `
+                                        <span class="${dailyColor} text-[10px] font-bold">
+                                            ${priceSign}${absAmount} (${absPercent}%)
+                                        </span>
+                                    ` : ''}
                                 </div>
                                 <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
