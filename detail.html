@@ -198,7 +198,7 @@
                             <td class="px-4 py-4">
                                 <div class="flex items-baseline space-x-1">
                                     <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
-                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">(${dailySign}${changeAmount} ${dailySign}${changePercent}%)</span>` : ''}
+                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">(${dailySign}${changeAmount} (${dailySign}${changePercent}%)</span>` : ''}
                                 </div>
                                 <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
