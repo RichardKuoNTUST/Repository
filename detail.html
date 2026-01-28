@@ -114,17 +114,17 @@
             const list = document.getElementById('stock-list');
             const totalAssetsDisplay = document.getElementById('total-assets');
             list.innerHTML = "<tr><td colspan='8' class='p-12 text-center text-gray-400 animate-pulse font-medium'>正在計算精準損益...</td></tr>";
-
+        
             try {
                 const [holdingsRes, dividendsRes] = await Promise.all([
                     _supabase.from('holdings').select('*').order('trade_date', { ascending: true }),
                     _supabase.from('dividends').select('*')
                 ]);
-
+        
                 if (holdingsRes.error) throw holdingsRes.error;
                 const groupedData = {};
-
-                // FIFO 損益算法與持股分類
+        
+                // FIFO 算法邏輯 (省略...保持與您之前一致)
                 holdingsRes.data.forEach(item => {
                     const symbol = item.symbol;
                     if (!groupedData[symbol]) {
@@ -133,7 +133,6 @@
                     const group = groupedData[symbol];
                     const shares = parseFloat(item.shares);
                     const totalPrice = parseFloat(item.total_price);
-
                     if (shares > 0) { 
                         group.buys.push({ remainingShares: shares, pricePerShare: totalPrice / shares });
                         group.totalShares += shares;
@@ -155,19 +154,18 @@
                         }
                     }
                 });
-
+        
                 let tableRows = "";
                 let grandTotalMarketValue = 0;
-
+        
                 for (const symbol in groupedData) {
                     const group = groupedData[symbol];
                     const priceInfo = await getLivePrice(symbol);
                     
-                    // 關鍵修正：確保變數有值，預防 undefined
                     const price = priceInfo ? priceInfo.price : null;
                     const changeAmount = priceInfo ? (priceInfo.changeAmount || 0) : 0;
                     const changePercent = priceInfo ? (priceInfo.changePercent || 0) : 0;
-
+        
                     const currentRemainingCost = group.buys.reduce((sum, b) => sum + (b.pricePerShare * b.remainingShares), 0);
                     const avgPrice = group.totalShares > 0 ? (currentRemainingCost / group.totalShares) : 0;
                     const marketVal = price ? (price * group.totalShares) : 0;
@@ -175,30 +173,30 @@
                     const stockDividends = (dividendsRes.data || [])
                         .filter(d => d.symbol === symbol)
                         .reduce((sum, d) => sum + (parseFloat(d.amount) - parseFloat(d.fee || 0)), 0);
-
+        
                     const estimatedSellCost = marketVal * (0.003 + 0.001425);
                     const unrealizedProfit = group.totalShares > 0 ? (marketVal - currentRemainingCost - estimatedSellCost) : 0;
                     const unrealizedPercent = currentRemainingCost > 0 ? (unrealizedProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
-
+        
                     const totalRealized = group.realizedProfit + stockDividends;
                     const totalProfit = unrealizedProfit + totalRealized;
                     const totalPercent = currentRemainingCost > 0 ? (totalProfit / currentRemainingCost * 100).toFixed(2) : "0.00";
-
+        
                     grandTotalMarketValue += marketVal;
-
-                    // 顏色判定
+        
+                    // 顏色與符號判定
                     const dailyColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
                     const dailySign = changePercent >= 0 ? '+' : ''; 
                     const unColor = unrealizedProfit >= 0 ? 'text-red-500' : 'text-green-600';
                     const totalColor = totalProfit >= 0 ? 'text-red-500' : 'text-green-600';
-
+        
                     tableRows += `
                         <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
                             <td class="px-4 py-4 font-bold text-slate-700">${symbol}</td>
-                            <td class="px-4 py-4">
+                            <td class="px-4 py-4 text-left">
                                 <div class="flex items-baseline space-x-1">
                                     <span class="text-emerald-600 font-bold">${price ? '$' + price.toLocaleString() : '---'}</span>
-                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">(${dailySign}${changeAmount} (${dailySign}${changePercent}%)</span>` : ''}
+                                    ${price ? `<span class="${dailyColor} text-[10px] font-bold">${dailySign}${changeAmount} (${dailySign}${changePercent}%)</span>` : ''}
                                 </div>
                                 <div class="text-[10px] text-gray-400 font-medium mt-1">均價 $${avgPrice.toFixed(2)}</div>
                             </td>
@@ -221,10 +219,10 @@
                             </td>
                         </tr>`;
                 }
-
+        
                 list.innerHTML = tableRows || "<tr><td colspan='8' class='p-8 text-center'>尚無持股紀錄</td></tr>";
                 totalAssetsDisplay.innerText = `$ ${Math.round(grandTotalMarketValue).toLocaleString()}`;
-
+        
             } catch (err) {
                 console.error("載入失敗:", err);
                 list.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-red-500 font-bold">連線失敗: ${err.message}</td></tr>`;
