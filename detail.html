@@ -70,7 +70,7 @@
         <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
             <div class="p-6 border-b border-gray-100 flex justify-between items-center">
                 <h3 class="text-xl font-bold text-slate-800">新增交易紀錄</h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+                <button onclick="closeModal()" class="text-gray-400">✕</button>
             </div>
             <div class="p-6 space-y-4">
                 <div>
@@ -84,7 +84,7 @@
                         <input type="number" id="trade-shares" oninput="calculateUnitCost()" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="買進為正">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">成交價 (單價)</label>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">成交單價</label>
                         <input type="number" id="trade-price-unit" oninput="calculateUnitCost()" class="w-full border rounded-xl px-4 py-3 outline-none" placeholder="0.00">
                     </div>
                 </div>
@@ -102,18 +102,18 @@
     
                 <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                     <div class="flex justify-between items-center text-sm">
-                        <span class="text-blue-600 font-medium">總支出成本:</span>
+                        <span class="text-blue-600 font-medium">總成本 (含費):</span>
                         <span id="display-total-cost" class="text-blue-800 font-bold">$ 0</span>
                     </div>
                     <div class="flex justify-between items-center text-sm mt-1">
-                        <span class="text-blue-600 font-medium">實際取得單價 (含費):</span>
+                        <span class="text-blue-600 font-medium">含費單價:</span>
                         <span id="display-unit-cost" class="text-blue-800 font-bold">$ 0.00</span>
                     </div>
                 </div>
             </div>
             <div class="p-6 bg-gray-50 flex space-x-3">
                 <button onclick="closeModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border">取消</button>
-                <button onclick="handleSave()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-blue-700 transition">儲存交易</button>
+                <button onclick="handleSave()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg">儲存交易</button>
             </div>
         </div>
     </div>
