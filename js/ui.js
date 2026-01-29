@@ -85,21 +85,6 @@ function closeDividendModal() {
     modal.classList.remove('flex');
 }
 
-// 儲存邏輯
-async function handleSave() {
-    const payload = {
-        symbol: document.getElementById('stock-symbol').value.toUpperCase(),
-        shares: parseInt(document.getElementById('trade-shares').value),
-        total_price: parseFloat(document.getElementById('total-price').value),
-        trade_date: document.getElementById('trade-date').value
-    };
-    const { error } = await _supabase.from('holdings').insert([payload]);
-    if (error) alert("儲存失敗: " + error.message);
-    else {
-        closeModal();
-        if (window.refreshData) window.refreshData(); // 呼叫 main.js 的重新整理
-    }
-}
 
 async function handleSaveDividend() {
     const payload = {
