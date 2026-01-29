@@ -34,33 +34,36 @@ function calculateUnitCost() {
 
 // 2. 儲存時包含總成本
 async function handleSave() {
-    const shares = parseInt(document.getElementById('trade-shares').value);
-    const priceUnit = parseFloat(document.getElementById('trade-price-unit').value);
-    const fee = parseFloat(document.getElementById('trade-fee').value) || 0;
+    // 檢查元素是否存在，避免 null 報錯
+    const elSymbol = document.getElementById('stock-symbol');
+    const elShares = document.getElementById('trade-shares');
+    const elPrice = document.getElementById('trade-price-unit');
+    const elFee = document.getElementById('trade-fee');
+    const elDate = document.getElementById('trade-date');
 
-    // 總成本 = (股數 * 單價) + 手續費
-    const total_price = (Math.abs(shares) * priceUnit) + fee;
-
-    const payload = {
-        symbol: document.getElementById('stock-symbol').value.toUpperCase(),
-        shares: shares,
-        total_price: total_price, // 這裡存入的是包含手續費後的「最終總額」
-        trade_date: document.getElementById('trade-date').value
-    };
-
-    if (!payload.symbol || !shares || !priceUnit) {
-        alert("請填寫完整資訊");
+    if (!elSymbol || !elShares || !elPrice) {
+        console.error("找不到輸入欄位！請檢查 HTML 中的 ID 是否正確。");
         return;
     }
 
+    const shares = parseInt(elShares.value);
+    const priceUnit = parseFloat(elPrice.value);
+    const fee = parseFloat(elFee.value) || 0;
+    const total_price = (Math.abs(shares) * priceUnit) + fee;
+
+    const payload = {
+        symbol: elSymbol.value.toUpperCase(),
+        shares: shares,
+        total_price: total_price,
+        trade_date: elDate.value
+    };
+
     const { error } = await _supabase.from('holdings').insert([payload]);
-    if (error) alert("儲存失敗: " + error.message);
-    else {
+    if (error) {
+        alert("儲зу失敗: " + error.message);
+    } else {
         closeModal();
         if (window.refreshData) window.refreshData();
-        // 清空輸入框
-        document.getElementById('display-total-cost').innerText = "$ 0";
-        document.getElementById('display-unit-cost').innerText = "$ 0.00";
     }
 }
 
