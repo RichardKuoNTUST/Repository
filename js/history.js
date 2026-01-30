@@ -22,15 +22,19 @@ let currentEditData = { table: '', id: '', symbol: '' };
 
 // js/history.js 的 loadHistory 完整更新
 
+/**
+ * 核心功能：載入股票明細並計算總結看板
+ */
 async function loadHistory(symbol) {
     const tradeBody = document.getElementById('trade-history-list');
     const divBody = document.getElementById('dividend-history-list');
     const summaryPanel = document.getElementById('stock-summary-panel');
 
-    // 1. 抓取資料與市價
+    // 1. 抓取即時市價 (建議 api.js 已實作快取)
     const priceInfo = await getLivePrice(symbol);
     const currentPrice = priceInfo ? priceInfo.price : null;
 
+    // 2. 同時抓取交易紀錄與股利資料
     const [holdingsRes, dividendsRes] = await Promise.all([
         _supabase.from('holdings').select('*').eq('symbol', symbol).order('trade_date', { ascending: true }),
         _supabase.from('dividends').select('*').eq('symbol', symbol)
@@ -39,22 +43,25 @@ async function loadHistory(symbol) {
     const trades = holdingsRes.data || [];
     const dividends = dividendsRes.data || [];
 
-    // 2. 【核心計算區】必須放在渲染之前
+    // 3. 【核心計算區】FIFO 演算法
     let totalShares = 0;
     let realizedProfit = 0;
     let buys = []; 
 
-    // FIFO 演算法計算
     trades.forEach(t => {
         const shares = parseFloat(t.shares);
         const totalPrice = parseFloat(t.total_price);
+        
         if (shares > 0) {
+            // 買入：記錄成本
             buys.push({ remaining: shares, pricePerShare: totalPrice / shares });
             totalShares += shares;
-        } else {
+        } else if (shares < 0) {
+            // 賣出：按 FIFO 扣除成本並計算已實現損益
             let sellQty = Math.abs(shares);
             const sellPricePerShare = totalPrice / sellQty;
             totalShares -= sellQty;
+
             while (sellQty > 0 && buys.length > 0) {
                 let first = buys[0];
                 if (first.remaining <= sellQty) {
@@ -70,7 +77,7 @@ async function loadHistory(symbol) {
         }
     });
 
-    // 計算各項總結數值
+    // 4. 計算面板數值
     const remainingCost = buys.reduce((sum, b) => sum + (b.pricePerShare * b.remaining), 0);
     const avgCost = totalShares > 0 ? (remainingCost / totalShares) : 0;
     const marketValue = currentPrice ? (totalShares * currentPrice) : 0;
@@ -78,13 +85,13 @@ async function loadHistory(symbol) {
     const totalDividends = dividends.reduce((sum, d) => sum + (parseFloat(d.amount) - parseFloat(d.fee || 0)), 0);
     const totalNetProfit = realizedProfit + unrealizedProfit + totalDividends;
 
-    // 處理今日漲跌樣式
+    // 漲跌樣式處理
     const changePercent = priceInfo ? priceInfo.changePercent : 0;
     const changeColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
     const changeIcon = changePercent >= 0 ? '▲' : '▼';
-
-    // 3. 【渲染總結面板】
     const profitColor = totalNetProfit >= 0 ? 'text-red-500' : 'text-green-600';
+
+    // 5. 【渲染總結面板】
     summaryPanel.innerHTML = `
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div class="text-xs font-bold text-gray-400 uppercase mb-1">目前股價 / 均價</div>
@@ -124,46 +131,52 @@ async function loadHistory(symbol) {
         </div>
     `;
 
-    // --- 4. 渲染交易紀錄列表 (保持原有的 map 邏輯，但按日期降序排列) ---
+    // 6. 【渲染交易紀錄列表】(降序)
     const displayTrades = [...trades].reverse(); 
     tradeBody.innerHTML = displayTrades.map(t => {
         const absShares = Math.abs(t.shares);
-        const unitPrice = (t.total_price - (t.fee || 0)) / absShares;
+        const unitPrice = absShares > 0 ? (t.total_price - (t.fee || 0)) / absShares : 0;
         let profitHTML = '<span class="text-gray-400">---</span>';
+        
         if (currentPrice && t.shares > 0) {
             const p = (absShares * currentPrice) - t.total_price;
             const color = p >= 0 ? 'text-red-500' : 'text-green-600';
             profitHTML = `<div class="${color} font-bold">$${Math.round(p).toLocaleString()}</div>`;
         } else if (t.shares < 0) {
-            profitHTML = '<span class="text-xs text-slate-300 italic">已結算</span>';
+            profitHTML = '<span class="text-xs text-slate-300 italic bg-slate-100 px-2 py-0.5 rounded">已結算</span>';
         }
 
         return `
-            <tr class="hover:bg-gray-50 border-b border-gray-50">
+            <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
                 <td class="px-4 py-4 text-gray-400 text-xs">${t.trade_date}</td>
                 <td class="px-4 py-4 font-bold ${t.shares > 0 ? 'text-red-500' : 'text-green-600'}">${t.shares > 0 ? '買入' : '賣出'}</td>
-                <td class="px-4 py-4 text-slate-700">${absShares.toLocaleString()} <span class="text-[10px] text-gray-400">@${unitPrice.toFixed(2)}</span></td>
-                <td class="px-4 py-4 font-bold text-slate-700">$${Math.round(t.total_price).toLocaleString()}</td>
+                <td class="px-4 py-4 text-slate-700">
+                    <div class="font-medium">${absShares.toLocaleString()} 股</div>
+                    <div class="text-[10px] text-gray-400">@${unitPrice.toFixed(2)}</div>
+                </td>
+                <td class="px-4 py-4">
+                    <div class="font-bold text-slate-700">$${Math.round(t.total_price).toLocaleString()}</div>
+                    <div class="text-[10px] text-gray-400">含費 $${t.fee || 0}</div>
+                </td>
                 <td class="px-4 py-4 text-right">${profitHTML}</td>
                 <td class="px-4 py-4 text-right">
-                    <button onclick='openEditModal("holdings", ${JSON.stringify(t)})' class="text-blue-500 font-bold text-xs border border-blue-100 px-2 py-1 rounded-lg">編輯</button>
+                    <button onclick='openEditModal("holdings", ${JSON.stringify(t)})' class="text-blue-500 font-bold text-xs border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition">編輯</button>
                 </td>
             </tr>`;
     }).join('');
 
-    // --- 5. 渲染股利列表 (降序) ---
+    // 7. 【渲染股利列表】(降序)
     const displayDividends = [...dividends].reverse();
     divBody.innerHTML = displayDividends.map(d => `
-        <tr class="hover:bg-gray-50 border-b border-gray-50">
+        <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
             <td class="px-4 py-4 text-gray-400 text-xs">${d.pay_date}</td>
             <td class="px-4 py-4 text-emerald-600 font-bold">$${parseFloat(d.amount).toLocaleString()}</td>
             <td class="px-4 py-4 text-gray-400 text-xs">$${d.fee || 0}</td>
             <td class="px-4 py-4 text-right">
-                <button onclick='openEditModal("dividends", ${JSON.stringify(d)})' class="text-blue-500 font-bold text-xs border border-blue-100 px-2 py-1 rounded-lg">編輯</button>
+                <button onclick='openEditModal("dividends", ${JSON.stringify(d)})' class="text-blue-500 font-bold text-xs border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition">編輯</button>
             </td>
         </tr>`).join('');
 }
-
 // 彈窗與更新邏輯 (與先前提供的相同)
 function openEditModal(table, data) {
     currentEditData = { table, id: data.id, symbol: data.symbol };
