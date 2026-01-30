@@ -48,9 +48,14 @@ async function loadHistory(symbol) {
     if (priceInfo && priceInfo.changePercent !== undefined && !isNaN(priceInfo.changePercent)) {
         changePercent = parseFloat(priceInfo.changePercent);
     }
+    const rawChange = priceInfo ? parseFloat(priceInfo.changePercent) : 0;
+    const changePercent = isNaN(rawChange) ? 0 : rawChange;
 
+    // 2. 根據數值決定顏色與圖標
     const changeColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
     const changeIcon = changePercent >= 0 ? '▲' : '▼';
+    
+    // 3. 總損益顏色
     const profitColor = totalNetProfit >= 0 ? 'text-red-500' : 'text-green-600';
     let totalShares = 0;
     let realizedProfit = 0;
