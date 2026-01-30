@@ -4,7 +4,19 @@ async function getLivePrice(symbol) {
     const stockId = symbol.split('.')[0];
     const cacheKey = `price_cache_${stockId}`;
     const CACHE_DURATION = 10 * 60 * 1000; // 10 分鐘快取 (毫秒)
-
+    const latestData = json.data[json.data.length - 1];
+    const yesterdayData = json.data[json.data.length - 2];
+    
+    const price = latestData.close;
+    // 計算漲跌幅：(今日收盤 - 昨日收盤) / 昨日收盤 * 100
+    const changePercent = yesterdayData ? ((price - yesterdayData.close) / yesterdayData.close * 100) : 0;
+    
+    const cachePayload = {
+        price: price,
+        changePercent: changePercent, // 確保這行有寫入
+        timestamp: new Date().getTime()
+    };
+    localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
     // 1. 檢查快取
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
