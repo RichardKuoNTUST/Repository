@@ -22,16 +22,16 @@ let currentEditData = { table: '', id: '', symbol: '' };
 async function loadHistory(symbol) {
     const tradeBody = document.getElementById('trade-history-list');
     const divBody = document.getElementById('dividend-history-list');
-
+    const unitPrice = (t.total_price - (t.fee || 0)) / Math.abs(t.shares);
     const { data: trades } = await _supabase.from('holdings').select('*').eq('symbol', symbol).order('trade_date', { ascending: false });
     tradeBody.innerHTML = trades.map(t => `
         <tr class="hover:bg-gray-50">
             <td class="px-4 py-3 text-gray-600">${t.trade_date}</td>
-            <td class="px-4 py-3"><span class="${t.shares > 0 ? 'text-red-500' : 'text-green-600'} font-bold">${t.shares > 0 ? '買入' : '賣出'}</span></td>
-            <td class="px-4 py-3 font-medium">${Math.abs(t.shares).toLocaleString()} 股</td>
-            <td class="px-4 py-3">$${Math.round(t.total_price).toLocaleString()}</td>
-            <td class="px-4 py-3 text-right">
-                <button onclick='openEditModal("holdings", ${JSON.stringify(t)})' class="text-blue-500 hover:underline font-bold">編輯</button>
+            <td class="px-4 py-3">...</td>
+            <td class="px-4 py-3 font-medium">${Math.abs(t.shares).toLocaleString()} 股 (@${unitPrice.toFixed(2)})</td>
+            <td class="px-4 py-3">
+                $${Math.round(t.total_price).toLocaleString()} 
+                <span class="text-[10px] text-gray-400">(含費$${t.fee || 0})</span>
             </td>
         </tr>
     `).join('');
