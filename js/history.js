@@ -1,7 +1,6 @@
 // js/history.js
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 從 URL 取得股票代號
     const urlParams = new URLSearchParams(window.location.search);
     const symbol = urlParams.get('symbol');
 
@@ -18,63 +17,75 @@ document.addEventListener('DOMContentLoaded', async () => {
 // 全域變數存儲當前編輯狀態
 let currentEditData = { table: '', id: '', symbol: '' };
 
-// 1. 載入列表並渲染 (修正 ReferenceError)
+/**
+ * 核心功能：載入並計算明細資料
+ */
 async function loadHistory(symbol) {
     const tradeBody = document.getElementById('trade-history-list');
     const divBody = document.getElementById('dividend-history-list');
 
-    // 1. 先抓取即時市價 (複用 api.js 的功能)
+    // 1. 先抓取即時市價 (複用 api.js)
+    // 確保你的 history.html 有引入 js/api.js 與 js/config.js
     const priceInfo = await getLivePrice(symbol);
     const currentPrice = priceInfo ? priceInfo.price : null;
 
-    // 2. 處理交易紀錄
-    const { data: trades } = await _supabase
+    // 2. 抓取交易紀錄
+    const { data: trades, error: tradeErr } = await _supabase
         .from('holdings')
         .select('*')
         .eq('symbol', symbol)
         .order('trade_date', { ascending: false });
     
-    if (trades) {
+    if (tradeErr) {
+        console.error("抓取交易紀錄失敗:", tradeErr);
+        tradeBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">資料讀取失敗</td></tr>`;
+    } else if (trades) {
         tradeBody.innerHTML = trades.map(t => {
             const absShares = Math.abs(t.shares);
+            // 計算該筆交易的單價 (排除手續費後)
             const unitPrice = absShares !== 0 ? (t.total_price - (t.fee || 0)) / absShares : 0;
             
-            // --- 計算該筆盈虧邏輯 ---
+            // --- 盈虧計算邏輯 ---
             let profitHTML = '<span class="text-gray-400">---</span>';
-            if (currentPrice && t.shares > 0) { // 僅針對未賣出的買入筆數計算
-                const currentVal = absShares * currentPrice;
-                const profit = currentVal - t.total_price;
+            
+            if (currentPrice && t.shares > 0) { 
+                // 買入筆數：計算目前未實現盈虧
+                const currentMarketValue = absShares * currentPrice;
+                const profit = currentMarketValue - t.total_price;
                 const profitPercent = (profit / t.total_price * 100).toFixed(2);
                 const color = profit >= 0 ? 'text-red-500' : 'text-green-600';
+                
                 profitHTML = `
                     <div class="${color} font-bold">$${Math.round(profit).toLocaleString()}</div>
-                    <div class="${color} text-[10px]">${profit >= 0 ? '▲' : '▼'} ${Math.abs(profitPercent)}%</div>
+                    <div class="${color} text-[10px] font-medium">${profit >= 0 ? '▲' : '▼'} ${Math.abs(profitPercent)}%</div>
                 `;
             } else if (t.shares < 0) {
-                profitHTML = '<span class="text-xs text-slate-400 italic">已結算</span>';
+                // 賣出筆數
+                profitHTML = '<span class="text-xs text-slate-400 italic bg-slate-100 px-2 py-0.5 rounded">已結算</span>';
             }
 
             return `
-                <tr class="hover:bg-gray-50 border-b border-gray-50">
-                    <td class="px-4 py-3 text-gray-600 text-xs">${t.trade_date}</td>
-                    <td class="px-4 py-3">
+                <tr class="hover:bg-gray-50 border-b border-gray-50 transition">
+                    <td class="px-4 py-4 text-gray-500 text-xs">${t.trade_date}</td>
+                    <td class="px-4 py-4">
                         <span class="${t.shares > 0 ? 'text-red-500' : 'text-green-600'} font-bold">
                             ${t.shares > 0 ? '買入' : '賣出'}
                         </span>
                     </td>
-                    <td class="px-4 py-3 font-medium">
-                        ${absShares.toLocaleString()} 股 
+                    <td class="px-4 py-4">
+                        <div class="font-medium text-slate-700">${absShares.toLocaleString()} 股</div>
                         <div class="text-[10px] text-gray-400">@${unitPrice.toFixed(2)}</div>
                     </td>
-                    <td class="px-4 py-3 font-bold text-slate-700">$${Math.round(t.total_price).toLocaleString()}</td>
-                    
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-4">
+                        <div class="font-bold text-slate-700">$${Math.round(t.total_price).toLocaleString()}</div>
+                        <div class="text-[10px] text-gray-400">含費 $${t.fee || 0}</div>
+                    </td>
+                    <td class="px-4 py-4 text-right">
                         ${profitHTML}
                     </td>
-
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-4 text-right">
                         <button onclick='openEditModal("holdings", ${JSON.stringify(t)})' 
-                                class="text-blue-500 hover:bg-blue-50 font-bold text-xs border border-blue-200 px-2 py-1 rounded transition">
+                                class="text-blue-500 hover:bg-blue-50 font-bold text-xs border border-blue-200 px-3 py-1.5 rounded-lg transition">
                             編輯
                         </button>
                     </td>
@@ -83,22 +94,24 @@ async function loadHistory(symbol) {
         }).join('');
     }
 
-    // --- 處理股利紀錄 ---
+    // 3. 抓取股利紀錄
     const { data: dividends, error: divErr } = await _supabase
         .from('dividends')
         .select('*')
         .eq('symbol', symbol)
         .order('pay_date', { ascending: false });
     
-    if (dividends) {
+    if (divErr) {
+        divBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">股利讀取失敗</td></tr>`;
+    } else if (dividends) {
         divBody.innerHTML = dividends.map(d => `
             <tr class="hover:bg-gray-50 border-b border-gray-50">
-                <td class="px-4 py-3 text-gray-600">${d.pay_date}</td>
-                <td class="px-4 py-3 text-emerald-600 font-bold">$${parseFloat(d.amount).toLocaleString()}</td>
-                <td class="px-4 py-3 text-gray-400">$${d.fee || 0}</td>
-                <td class="px-4 py-3 text-right">
+                <td class="px-4 py-4 text-gray-500 text-xs">${d.pay_date}</td>
+                <td class="px-4 py-4 text-emerald-600 font-bold">$${parseFloat(d.amount).toLocaleString()}</td>
+                <td class="px-4 py-4 text-gray-400">$${d.fee || 0}</td>
+                <td class="px-4 py-4 text-right">
                     <button onclick='openEditModal("dividends", ${JSON.stringify(d)})' 
-                            class="text-blue-500 hover:text-blue-700 font-bold text-xs border border-blue-200 px-2 py-1 rounded">
+                            class="text-blue-500 hover:bg-blue-50 font-bold text-xs border border-blue-200 px-3 py-1.5 rounded-lg transition">
                         編輯
                     </button>
                 </td>
@@ -107,59 +120,7 @@ async function loadHistory(symbol) {
     }
 }
 
-// 2. 開啟編輯彈窗
-function openEditModal(table, data) {
-    currentEditData = { table, id: data.id, symbol: data.symbol };
-    const body = document.getElementById('edit-modal-body');
-    const modal = document.getElementById('editModal');
-    
-    if (table === 'holdings') {
-        document.getElementById('edit-modal-title').innerText = "編輯買賣紀錄";
-        body.innerHTML = `
-            <div class="space-y-4">
-                <div><label class="block text-xs font-bold text-gray-400 mb-1 uppercase">日期</label>
-                <input type="date" id="edit-date" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.trade_date}"></div>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-400 mb-1">股數 (正買負賣)</label>
-                    <input type="number" id="edit-shares" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.shares}"></div>
-                    
-                    <div><label class="block text-xs font-bold text-gray-400 mb-1">手續費</label>
-                    <input type="number" id="edit-fee" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.fee || 0}"></div>
-                </div>
-
-                <div><label class="block text-xs font-bold text-gray-400 mb-1">總金額 (含費用)</label>
-                <input type="number" id="edit-total" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.total_price}"></div>
-            </div>
-        `;
-    } else {
-        document.getElementById('edit-modal-title').innerText = "編輯股利紀錄";
-        body.innerHTML = `
-            <div class="space-y-4">
-                <div><label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">發放日期</label>
-                <input type="date" id="edit-date" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.pay_date}"></div>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">實領股利</label>
-                    <input type="number" id="edit-amount" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.amount}"></div>
-                    
-                    <div><label class="block text-xs font-bold text-emerald-600 mb-1 uppercase">費用</label>
-                    <input type="number" id="edit-fee" class="w-full border rounded-xl px-4 py-3 outline-none" value="${data.fee || 0}"></div>
-                </div>
-            </div>
-        `;
-    }
-
-    // 重新連結按鈕點擊事件
-    document.getElementById('btn-save').onclick = handleUpdate;
-    document.getElementById('btn-delete').onclick = handleDelete;
-
-    modal.classList.replace('hidden', 'flex');
-}
-
-function closeEditModal() {
-    document.getElementById('editModal').classList.replace('flex', 'hidden');
-}
+// 彈窗邏輯與 CRUD 函式 (handleUpdate, handleDelete 等) 請保留在下方...
 
 // 3. 更新數據 (Save)
 async function handleUpdate() {
