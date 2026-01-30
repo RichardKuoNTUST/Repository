@@ -70,6 +70,15 @@ async function loadHistory(symbol) {
         }
     });
 
+    // 計算均價
+    const avgCost = totalShares > 0 ? (remainingCost / totalShares) : 0;
+    
+    // 處理今日漲跌幅樣式
+    const changeAmount = priceInfo ? priceInfo.changeAmount : 0;
+    const changePercent = priceInfo ? priceInfo.changePercent : 0;
+    const changeColor = changeAmount >= 0 ? 'text-red-500' : 'text-green-600';
+    const changeIcon = changeAmount >= 0 ? '▲' : '▼';
+
     // 計算現有成本、市值與股利
     const remainingCost = buys.reduce((sum, b) => sum + (b.pricePerShare * b.remaining), 0);
     const marketValue = currentPrice ? (totalShares * currentPrice) : 0;
@@ -80,25 +89,45 @@ async function loadHistory(symbol) {
     // --- 3. 渲染 Total 總結欄位 ---
     const profitColor = totalNetProfit >= 0 ? 'text-red-500' : 'text-green-600';
     summaryPanel.innerHTML = `
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 ring-2 ring-slate-500/5">
+            <div class="text-xs font-bold text-gray-400 uppercase mb-1">目前股價 / 均價</div>
+            <div class="flex items-baseline space-x-2">
+                <span class="text-lg font-black text-slate-700">${currentPrice || '---'}</span>
+                <span class="text-[10px] font-bold ${changeColor}">
+                    ${currentPrice ? `${changeIcon}${Math.abs(changePercent)}%` : ''}
+                </span>
+            </div>
+            <div class="text-sm font-bold text-slate-400">
+                Avg: <span class="text-slate-600">$${avgCost.toFixed(2)}</span>
+            </div>
+        </div>
+    
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div class="text-xs font-bold text-gray-400 uppercase mb-1">目前持股 / 市值</div>
             <div class="text-lg font-black text-slate-700">${totalShares.toLocaleString()} 股</div>
             <div class="text-sm font-bold text-blue-600">$${Math.round(marketValue).toLocaleString()}</div>
         </div>
+    
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div class="text-xs font-bold text-gray-400 uppercase mb-1">累計領取股利</div>
             <div class="text-lg font-black text-emerald-600">$${Math.round(totalDividends).toLocaleString()}</div>
-            <div class="text-[10px] text-gray-400">已扣除手續費</div>
+            <div class="text-[10px] text-gray-400">已扣費用</div>
         </div>
+    
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div class="text-xs font-bold text-gray-400 uppercase mb-1">已實現損益</div>
             <div class="text-lg font-black ${realizedProfit >= 0 ? 'text-red-500' : 'text-green-600'}">$${Math.round(realizedProfit).toLocaleString()}</div>
-            <div class="text-[10px] text-gray-400">不含庫存</div>
+            <div class="text-[10px] text-gray-400">離場獲利</div>
         </div>
-        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 ring-2 ring-blue-500/10">
-            <div class="text-xs font-bold text-gray-400 uppercase mb-1">總預估損益</div>
-            <div class="text-xl font-black ${profitColor}">$${Math.round(totalNetProfit).toLocaleString()}</div>
-            <div class="text-[10px] font-bold ${profitColor}">${totalNetProfit >= 0 ? '▲' : '▼'} ${remainingCost > 0 ? (totalNetProfit/remainingCost*100).toFixed(2) : '0.00'}%</div>
+    
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 bg-blue-50/30">
+            <div class="text-xs font-bold text-blue-400 uppercase mb-1">總預估損益</div>
+            <div class="text-xl font-black ${totalNetProfit >= 0 ? 'text-red-500' : 'text-green-600'}">
+                $${Math.round(totalNetProfit).toLocaleString()}
+            </div>
+            <div class="text-[10px] font-bold ${totalNetProfit >= 0 ? 'text-red-500' : 'text-green-600'}">
+                ${totalNetProfit >= 0 ? '▲' : '▼'} ${remainingCost > 0 ? (totalNetProfit/remainingCost*100).toFixed(2) : '0.00'}%
+            </div>
         </div>
     `;
 
