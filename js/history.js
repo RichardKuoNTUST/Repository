@@ -23,8 +23,12 @@ async function loadHistory(symbol) {
     const tradeBody = document.getElementById('trade-history-list');
     const divBody = document.getElementById('dividend-history-list');
 
-    // --- 處理交易紀錄 ---
-    const { data: trades, error: tradeErr } = await _supabase
+    // 1. 先抓取即時市價 (複用 api.js 的功能)
+    const priceInfo = await getLivePrice(symbol);
+    const currentPrice = priceInfo ? priceInfo.price : null;
+
+    // 2. 處理交易紀錄
+    const { data: trades } = await _supabase
         .from('holdings')
         .select('*')
         .eq('symbol', symbol)
@@ -32,29 +36,45 @@ async function loadHistory(symbol) {
     
     if (trades) {
         tradeBody.innerHTML = trades.map(t => {
-            // 關鍵修正：將 unitPrice 計算移到 map 內部，這裡才有 t 變數
             const absShares = Math.abs(t.shares);
             const unitPrice = absShares !== 0 ? (t.total_price - (t.fee || 0)) / absShares : 0;
             
+            // --- 計算該筆盈虧邏輯 ---
+            let profitHTML = '<span class="text-gray-400">---</span>';
+            if (currentPrice && t.shares > 0) { // 僅針對未賣出的買入筆數計算
+                const currentVal = absShares * currentPrice;
+                const profit = currentVal - t.total_price;
+                const profitPercent = (profit / t.total_price * 100).toFixed(2);
+                const color = profit >= 0 ? 'text-red-500' : 'text-green-600';
+                profitHTML = `
+                    <div class="${color} font-bold">$${Math.round(profit).toLocaleString()}</div>
+                    <div class="${color} text-[10px]">${profit >= 0 ? '▲' : '▼'} ${Math.abs(profitPercent)}%</div>
+                `;
+            } else if (t.shares < 0) {
+                profitHTML = '<span class="text-xs text-slate-400 italic">已結算</span>';
+            }
+
             return `
                 <tr class="hover:bg-gray-50 border-b border-gray-50">
-                    <td class="px-4 py-3 text-gray-600">${t.trade_date}</td>
+                    <td class="px-4 py-3 text-gray-600 text-xs">${t.trade_date}</td>
                     <td class="px-4 py-3">
-                        <span class="${t.shares > 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold'}">
+                        <span class="${t.shares > 0 ? 'text-red-500' : 'text-green-600'} font-bold">
                             ${t.shares > 0 ? '買入' : '賣出'}
                         </span>
                     </td>
                     <td class="px-4 py-3 font-medium">
                         ${absShares.toLocaleString()} 股 
-                        <span class="text-[10px] text-gray-400">(@${unitPrice.toFixed(2)})</span>
+                        <div class="text-[10px] text-gray-400">@${unitPrice.toFixed(2)}</div>
                     </td>
-                    <td class="px-4 py-3">
-                        <div class="font-bold text-slate-700">$${Math.round(t.total_price).toLocaleString()}</div>
-                        <div class="text-[10px] text-gray-400 italic">含費 $${t.fee || 0}</div>
+                    <td class="px-4 py-3 font-bold text-slate-700">$${Math.round(t.total_price).toLocaleString()}</td>
+                    
+                    <td class="px-4 py-3 text-right">
+                        ${profitHTML}
                     </td>
+
                     <td class="px-4 py-3 text-right">
                         <button onclick='openEditModal("holdings", ${JSON.stringify(t)})' 
-                                class="text-blue-500 hover:text-blue-700 font-bold text-xs border border-blue-200 px-2 py-1 rounded">
+                                class="text-blue-500 hover:bg-blue-50 font-bold text-xs border border-blue-200 px-2 py-1 rounded transition">
                             編輯
                         </button>
                     </td>
