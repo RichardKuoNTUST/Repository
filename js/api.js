@@ -1,11 +1,27 @@
 // js/api.js
+
 async function getLivePrice(symbol) {
     const stockId = symbol.split('.')[0];
-    const cacheKey = `price_info_${stockId}`;
-    
+    const cacheKey = `price_cache_${stockId}`;
+    const CACHE_DURATION = 10 * 60 * 1000; // 10 分鐘快取 (毫秒)
+
+    // 1. 檢查快取
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+        const { price, timestamp } = JSON.parse(cachedData);
+        const isFresh = (new Date().getTime() - timestamp) < CACHE_DURATION;
+        
+        if (isFresh) {
+            console.log(`使用快取股價: ${symbol} = ${price}`);
+            return { price: price };
+        }
+    }
+
+    // 2. 如果無快取或已過期，則抓取新資料
     try {
+        console.log(`快取過期，重新抓取: ${symbol}...`);
         const date = new Date();
-        date.setDate(date.getDate() - 10);
+        date.setDate(date.getDate() - 5);
         const startDate = date.toISOString().split('T')[0];
         
         const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FINMIND_TOKEN}`;
@@ -15,21 +31,21 @@ async function getLivePrice(symbol) {
         const rawData = await response.json();
         const json = JSON.parse(rawData.contents);
 
-        if (json.data && json.data.length >= 2) {
-            const latest = json.data[json.data.length - 1].close;
-            const prev = json.data[json.data.length - 2].close;
-            const result = { 
-                price: latest, 
-                changeAmount: (latest - prev).toFixed(2),
-                changePercent: (((latest - prev) / prev) * 100).toFixed(2)
+        if (json.data && json.data.length > 0) {
+            const latestPrice = json.data[json.data.length - 1].close;
+            
+            // 3. 存入快取
+            const cachePayload = {
+                price: latestPrice,
+                timestamp: new Date().getTime()
             };
-            localStorage.setItem(cacheKey, JSON.stringify({ data: result, time: new Date().toLocaleString() }));
-            return result;
+            localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
+            
+            return { price: latestPrice };
         }
         return null;
     } catch (e) {
-        console.warn(`無法獲取 ${symbol} 即時股價，嘗試讀取緩存...`);
-        const backup = localStorage.getItem(cacheKey);
-        return backup ? JSON.parse(backup).data : null;
+        console.error("抓取失敗，回傳舊快取或 null", e);
+        return cachedData ? JSON.parse(cachedData) : null;
     }
 }
