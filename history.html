@@ -54,5 +54,22 @@
             </div>
         </div>
     </div>
+    <div id="editModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 id="edit-modal-title" class="text-xl font-bold text-slate-800">編輯紀錄</h3>
+                <button onclick="closeEditModal()" class="text-gray-400">✕</button>
+            </div>
+            <div class="p-6 space-y-4" id="edit-modal-body">
+                </div>
+            <div class="p-6 bg-gray-50 flex flex-col gap-3">
+                <div class="flex space-x-3">
+                    <button onclick="closeEditModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border hover:bg-gray-100 transition">Cancel</button>
+                    <button id="btn-save" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-blue-700 transition">Save</button>
+                </div>
+                <button id="btn-delete" class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-2xl border border-red-100 hover:bg-red-100 transition">Delete</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
