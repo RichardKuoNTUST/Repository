@@ -55,6 +55,7 @@ async function handleSave() {
         symbol: elSymbol.value.toUpperCase(),
         shares: shares,
         total_price: total_price,
+        fee: fee,
         trade_date: elDate.value
     };
 
