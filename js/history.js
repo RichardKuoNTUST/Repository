@@ -44,6 +44,14 @@ async function loadHistory(symbol) {
     const dividends = dividendsRes.data || [];
 
     // 3. 【核心計算區】FIFO 演算法
+    let changePercent = 0;
+    if (priceInfo && priceInfo.changePercent !== undefined && !isNaN(priceInfo.changePercent)) {
+        changePercent = parseFloat(priceInfo.changePercent);
+    }
+
+    const changeColor = changePercent >= 0 ? 'text-red-500' : 'text-green-600';
+    const changeIcon = changePercent >= 0 ? '▲' : '▼';
+    const profitColor = totalNetProfit >= 0 ? 'text-red-500' : 'text-green-600';
     let totalShares = 0;
     let realizedProfit = 0;
     let buys = []; 
@@ -98,7 +106,7 @@ async function loadHistory(symbol) {
             <div class="flex items-baseline space-x-2">
                 <span class="text-lg font-black text-slate-700">${currentPrice || '---'}</span>
                 <span class="text-[10px] font-bold ${changeColor}">
-                    ${currentPrice ? `${changeIcon}${Math.abs(changePercent)}%` : ''}
+                    ${currentPrice ? `${changeIcon}${Math.abs(changePercent).toFixed(2)}%` : ''}
                 </span>
             </div>
             <div class="text-sm font-bold text-slate-400">Avg: $${avgCost.toFixed(2)}</div>
