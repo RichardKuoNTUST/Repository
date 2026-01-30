@@ -138,9 +138,9 @@ async function loadDetailData() {
                         <div class="${totalColor} text-[10px] font-bold">${totalProfit >= 0 ? '▲' : '▼'} ${totalPercent}%</div>
                     </td>
                     <td class="px-4 py-4 text-right">
-                        <button onclick='alert("明細功能開發中")' class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition">
+                        <a href="history.html?symbol=${symbol}" class="bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition inline-block">
                             明細
-                        </button>
+                        </a>
                     </td>
                 </tr>`;
         }
