@@ -165,17 +165,26 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
 
 // 趨勢圖邏輯 (含補算與繪製)
 async function renderTrendChart(symbol, trades, dividends) {
+    
     const ctx = document.getElementById('trendChart').getContext('2d');
     const loadingMsg = document.getElementById('chart-loading');
     
     try {
-        const { data: latestRecord, error: dbError } = await _supabase
+        // 修改 renderTrendChart 內部的前幾行
+        const { data: records, error: dbError } = await _supabase
             .from('daily_stats')
             .select('date')
             .eq('symbol', symbol)
             .order('date', { ascending: false })
-            .limit(1)
-            .single();
+            .limit(1); // 取消 .single() 改用 limit(1)
+        
+        if (dbError) {
+            console.error("資料庫讀取錯誤 (406 可能是欄位名稱不符):", dbError);
+            loadingMsg.innerText = "資料庫連線錯誤，請確認 SQL 表格已建立";
+            return;
+        }
+        
+        const lastDbDate = (records && records.length > 0) ? records[0].date : null;
 
         const lastDbDate = latestRecord ? latestRecord.date : null;
         const today = new Date().toISOString().split('T')[0];
