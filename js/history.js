@@ -163,36 +163,39 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
         </tr>`).join('');
 }
 
-// 趨勢圖邏輯 (含補算與繪製)
 async function renderTrendChart(symbol, trades, dividends) {
-    
     const ctx = document.getElementById('trendChart').getContext('2d');
     const loadingMsg = document.getElementById('chart-loading');
     
     try {
-        // 修改 renderTrendChart 內部的前幾行
+        console.log("1. 開始檢查歷史數據狀態...");
+        
+        // --- 修正區域：確保變數只宣告一次 ---
         const { data: records, error: dbError } = await _supabase
             .from('daily_stats')
             .select('date')
             .eq('symbol', symbol)
             .order('date', { ascending: false })
-            .limit(1); // 取消 .single() 改用 limit(1)
-        
+            .limit(1);
+
         if (dbError) {
-            console.error("資料庫讀取錯誤 (406 可能是欄位名稱不符):", dbError);
-            loadingMsg.innerText = "資料庫連線錯誤，請確認 SQL 表格已建立";
+            console.error("資料庫讀取錯誤:", dbError);
+            loadingMsg.innerText = "資料庫連線錯誤";
             return;
         }
-        
-        const lastDbDate = (records && records.length > 0) ? records[0].date : null;
 
-        const lastDbDate = latestRecord ? latestRecord.date : null;
+        // 這裡宣告一次就好
+        const lastDbDate = (records && records.length > 0) ? records[0].date : null;
+        // ----------------------------------
+
         const today = new Date().toISOString().split('T')[0];
+        console.log(`2. 資料庫最新日期: ${lastDbDate || '無'}`);
 
         let startDate = null;
         if (!lastDbDate) {
             if (trades.length > 0) {
-                startDate = trades[0].trade_date; // 從第一筆交易日開始
+                // 注意：這裡直接抓 trades[0].trade_date，前提是 trades 已經是升序
+                startDate = trades[0].trade_date; 
             } else {
                 loadingMsg.innerText = "尚無交易紀錄";
                 return;
@@ -203,12 +206,12 @@ async function renderTrendChart(symbol, trades, dividends) {
             startDate = d.toISOString().split('T')[0];
         }
 
-        // 如果需要同步新天數
         if (startDate <= today) {
             loadingMsg.innerText = `正在更新數據...`;
             await syncDailyDataToDB(symbol, startDate, today, trades, dividends);
         }
 
+        // 重新讀取完整資料繪圖
         const { data: historyData } = await _supabase
             .from('daily_stats')
             .select('*')
@@ -217,47 +220,53 @@ async function renderTrendChart(symbol, trades, dividends) {
             .limit(730);
 
         if (!historyData || historyData.length === 0) {
-            loadingMsg.innerText = "無歷史股價數據";
+            loadingMsg.innerText = "無數據可顯示";
             return;
         }
 
         loadingMsg.style.display = 'none';
+        renderLineChart(ctx, historyData); // 呼叫下方的繪圖函式
 
-        if (window.myTrendChart) window.myTrendChart.destroy();
-        window.myTrendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: historyData.map(d => d.date),
-                datasets: [
-                    {
-                        label: '總權益',
-                        data: historyData.map(d => d.total_value),
-                        borderColor: 'rgb(239, 68, 68)',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        fill: true,
-                        tension: 0.1,
-                        pointRadius: 0
-                    },
-                    {
-                        label: '投入成本',
-                        data: historyData.map(d => d.total_cost),
-                        borderColor: 'rgb(100, 116, 139)',
-                        borderDash: [5, 5],
-                        fill: false,
-                        tension: 0.1,
-                        pointRadius: 0
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { x: { display: false }, y: { beginAtZero: false } }
-            }
-        });
     } catch (err) {
-        console.error("圖表錯誤:", err);
+        console.error("圖表流程錯誤:", err);
     }
+}
+
+// 抽取出來的繪圖邏輯，讓代碼更整潔
+function renderLineChart(ctx, data) {
+    if (window.myTrendChart) window.myTrendChart.destroy();
+    window.myTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.date),
+            datasets: [
+                {
+                    label: '總權益',
+                    data: data.map(d => d.total_value),
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0
+                },
+                {
+                    label: '投入成本',
+                    data: data.map(d => d.total_cost),
+                    borderColor: 'rgb(100, 116, 139)',
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: { x: { display: false }, y: { beginAtZero: false } }
+        }
+    });
 }
 
 async function syncDailyDataToDB(symbol, startDate, endDate, allTrades, allDividends) {
