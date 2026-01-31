@@ -130,6 +130,7 @@ async function loadHistory(symbol) {
             </div>
         `;
     }
+    renderTables(trades, dividends, currentPrice);
 
     // 6. 【渲染交易清單】(顯示順序：最新日期在上)
     const displayTrades = [...trades].reverse();
