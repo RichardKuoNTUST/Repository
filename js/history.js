@@ -244,32 +244,53 @@ async function renderTrendChart(symbol, trades, dividends) {
 async function syncDailyDataToDB(symbol, startDate, endDate, allTrades, allDividends) {
     const stockId = symbol.split('.')[0];
     try {
+        console.log(`準備同步 ${symbol} 從 ${startDate} 到 ${endDate} 的數據...`);
+
         const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&end_date=${endDate}&token=${FINMIND_TOKEN}`;
         const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
+        
         const res = await fetch(proxyUrl);
         const raw = await res.json();
         const json = JSON.parse(raw.contents);
 
-        if (json.data && json.data.length > 0) {
-            let upsertData = json.data.map(p => {
-                const stats = calculateStatsUntilDate(p.date, allTrades, allDividends, p.close);
-                return {
-                    symbol: symbol,
-                    date: p.date, // 修正原 code 的 currDate
-                    close_price: p.close, // 修正原 code 的 closePrice
-                    total_cost: stats.totalCost,
-                    total_value: stats.totalValue
-                };
-            });
-
-            await _supabase.from('daily_stats').upsert(upsertData, { onConflict: 'symbol, date' });
-            console.log(`成功同步 ${upsertData.length} 筆數據到 Supabase`);
+        if (!json.data || json.data.length === 0) {
+            console.warn("FinMind API 未回傳任何數據，請檢查 Token 或日期範圍");
+            return;
         }
+
+        const upsertData = json.data.map(p => {
+            // 強制將股價轉為數字，避免資料庫型態錯誤
+            const closePrice = parseFloat(p.close); 
+            
+            // 使用你的計算邏輯計算該日的資產狀態
+            const stats = calculateStatsUntilDate(p.date, allTrades, allDividends, closePrice);
+            
+            return {
+                symbol: symbol,
+                date: p.date,
+                close_price: closePrice, // 對應 Supabase 欄位名
+                total_cost: stats.totalCost,
+                total_value: stats.totalValue
+            };
+        });
+
+        console.log("正在寫入 Supabase:", upsertData.slice(0, 2)); // 印出前兩筆確認格式
+
+        const { error: upsertError } = await _supabase
+            .from('daily_stats')
+            .upsert(upsertData, { onConflict: 'symbol, date' });
+
+        if (upsertError) {
+            console.error("Supabase 寫入失敗:", upsertError.message);
+            // 如果報錯是 "column close_price does not exist"，請執行下方的 SQL
+        } else {
+            console.log(`✅ 成功同步 ${upsertData.length} 筆數據到資料庫`);
+        }
+
     } catch (e) {
-        console.error("API 同步失敗:", e);
+        console.error("❌ 同步流程發生異常:", e);
     }
 }
-
 /**
  * 切換時間範圍邏輯
  */
