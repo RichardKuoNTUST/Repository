@@ -288,7 +288,8 @@ async function syncDailyDataToDB(symbol, startDate, endDate, allTrades, allDivid
                 const stats = calculateStatsUntilDate(p.date, allTrades, allDividends, p.close);
                 return {
                     symbol: symbol,
-                    date: p.date,
+                    date: currDate,
+                    close_price: closePrice, // 儲存當天收盤價
                     total_cost: stats.totalCost,
                     total_value: stats.totalValue
                 };
@@ -375,101 +376,101 @@ function updateChartRange(range) {
     renderFilteredChart(filteredData, range);
 }
 
+/**
+ * 修正後的雙軸繪圖函式：左軸(股價) vs 右軸(資產價值)
+ */
 function renderFilteredChart(data, range) {
     const ctx = document.getElementById('trendChart').getContext('2d');
     if (window.myTrendChart) window.myTrendChart.destroy();
 
+    // 取得該股票的歷史收盤價（假設從 daily_stats 或另外存）
+    // 如果你在 syncDailyDataToDB 有存 close_price，這裡就可以直接用
+    // 註：若 daily_stats 沒存 close_price，建議在 sync 時加入該欄位
+    
     window.myTrendChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.map(d => d.date),
             datasets: [
                 {
-                    label: '總權益',
+                    label: '股票收盤價',
+                    data: data.map(d => d.close_price || 0), // 需確保資料表有存收盤價
+                    borderColor: 'rgb(59, 130, 246)', // 藍色
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    yAxisID: 'y-price', // 指定左軸
+                    tension: 0.1,
+                    pointRadius: 0
+                },
+                {
+                    label: '總資產價值',
                     data: data.map(d => d.total_value),
-                    borderColor: 'rgb(239, 68, 68)',
+                    borderColor: 'rgb(239, 68, 68)', // 紅色
                     backgroundColor: 'rgba(239, 68, 68, 0.1)',
                     borderWidth: 2,
                     fill: true,
+                    yAxisID: 'y-value', // 指定右軸
                     tension: 0.1,
-                    pointRadius: range === '5D' ? 5 : 0, // 5天模式下點大一點
-                    pointBackgroundColor: 'rgb(239, 68, 68)'
-                },
-                {
-                    label: '投入成本',
-                    data: data.map(d => d.total_cost),
-                    borderColor: 'rgb(100, 116, 139)',
-                    borderDash: [5, 5],
-                    fill: false,
-                    tension: 0.1,
-                    pointRadius: 0
+                    pointRadius: range === '5D' ? 5 : 0
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             scales: {
                 x: {
-                    display: true,
                     ticks: {
-                        autoSkip: range !== '5D', // 5D 模式下「不」自動跳過任何標籤
-                        maxRotation: 45, // 日期多時稍微傾斜
-                        minRotation: 0,
-                        callback: function(val, index) {
-                            const dateStr = this.getLabelForValue(val); // 格式如 "2024-05-20"
+                        autoSkip: range !== '5D',
+                        maxRotation: 0,
+                        callback: function(val) {
+                            const dateStr = this.getLabelForValue(val);
                             const date = new Date(dateStr);
                             const m = date.getMonth() + 1;
                             const d = date.getDate();
-
-                            // --- 5天模式：強迫回傳每一天的 月/日 ---
-                            if (range === '5D') {
-                                return `${m}/${d}`; 
-                            }
-                            
-                            // 1個月：每週標示 (1, 8, 15, 22, 29 號)
-                            if (range === '1M') {
-                                return [1, 8, 15, 22, 29].includes(d) ? `${m}/${d}` : null;
-                            }
-                            
-                            // 3個月：每兩週標示 (1, 15 號)
-                            if (range === '3M') {
-                                return [1, 15].includes(d) ? `${m}/${d}` : null;
-                            }
-                            
-                            // 6個月：每個月標示
-                            if (range === '6M') {
-                                return d === 1 ? `${m}月` : null;
-                            }
-                            
-                            // 1年：每兩個月標示
-                            if (range === '1Y') {
-                                return (d === 1 && m % 2 !== 0) ? `${m}月` : null;
-                            }
-                            
-                            // 2年：每三個月標示
-                            if (range === '2Y') {
-                                return (d === 1 && [1, 4, 7, 10].includes(m)) ? `${m}月` : null;
-                            }
+                            if (range === '5D') return `${m}/${d}`;
+                            if (range === '1M' && [1, 8, 15, 22, 29].includes(d)) return `${m}/${d}`;
+                            if (range === '3M' && [1, 15].includes(d)) return `${m}/${d}`;
+                            if (range === '6M' && d === 1) return `${m}月`;
+                            if (range === '1Y' && d === 1 && m % 2 !== 0) return `${m}月`;
+                            if (range === '2Y' && d === 1 && [1, 4, 7, 10].includes(m)) return `${m}月`;
                             return null;
                         }
-                    },
-                    grid: {
-                        display: range === '5D' // 5天模式顯示垂直線，更有對齊感
                     }
                 },
-                y: {
-                    position: 'right',
-                    ticks: {
+                'y-price': {
+                    type: 'linear',
+                    display: true,
+                    position: 'left', // 左軸：顯示股價
+                    title: { display: true, text: '股價 ($)' },
+                    ticks: { color: 'rgb(59, 130, 246)' },
+                    grid: { drawOnChartArea: true } // 保留左軸網格線
+                },
+                'y-value': {
+                    type: 'linear',
+                    display: true,
+                    position: 'right', // 右軸：顯示盈虧/資產
+                    title: { display: true, text: '資產總額 ($)' },
+                    ticks: { 
+                        color: 'rgb(239, 68, 68)',
                         callback: (val) => '$' + Math.round(val).toLocaleString()
-                    }
+                    },
+                    grid: { drawOnChartArea: false } // 隱藏右軸網格線，避免畫面太亂
                 }
             },
             plugins: {
-                legend: { display: false },
                 tooltip: {
-                    mode: 'index',
-                    intersect: false
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) {
+                                label += '$' + Math.round(context.parsed.y).toLocaleString();
+                            }
+                            return label;
+                        }
+                    }
                 }
             }
         }
