@@ -233,8 +233,8 @@ async function renderTrendChart(symbol, trades, dividends) {
         // 預設顯示 5 天 (或是你想要的預設值)
         updateChartRange('5D');
 
-        loadingMsg.style.display = 'none';
-        renderLineChart(ctx, historyData); // 呼叫下方的繪圖函式
+        //loadingMsg.style.display = 'none';
+        //renderLineChart(ctx, historyData); // 呼叫下方的繪圖函式
 
     } catch (err) {
         console.error("圖表流程錯誤:", err);
