@@ -213,31 +213,27 @@ async function renderTrendChart(symbol, trades, dividends) {
             loadingMsg.innerText = `正在更新數據...`;
             await syncDailyDataToDB(symbol, startDate, today, trades, dividends);
         }
-    
+        
         const { data: historyData } = await _supabase
             .from('daily_stats')
             .select('*')
             .eq('symbol', symbol)
             .order('date', { ascending: true })
             .limit(730);
-    
+
         if (!historyData || historyData.length === 0) {
-            document.getElementById('chart-loading').innerText = "無歷史數據";
+            loadingMsg.innerText = "無歷史數據";
             return;
         }
-    
-        // 儲存到全域變數，切換時不用再跑資料庫
-        fullHistoryData = historyData;
-        document.getElementById('chart-loading').style.display = 'none';
-    
-        // 預設顯示 5 天 (或是你想要的預設值)
-        updateChartRange('5D');
 
-        //loadingMsg.style.display = 'none';
-        //renderLineChart(ctx, historyData); // 呼叫下方的繪圖函式
+        fullHistoryData = historyData;
+        loadingMsg.style.display = 'none';
+
+        // --- 關鍵：確保這行在最後執行 ---
+        updateChartRange('5D'); 
 
     } catch (err) {
-        console.error("圖表流程錯誤:", err);
+        console.error("圖表錯誤:", err);
     }
 }
 
@@ -379,12 +375,8 @@ function updateChartRange(range) {
     renderFilteredChart(filteredData, range);
 }
 
-/**
- * 根據篩選後的資料繪圖
- */
 function renderFilteredChart(data, range) {
     const ctx = document.getElementById('trendChart').getContext('2d');
-    
     if (window.myTrendChart) window.myTrendChart.destroy();
 
     window.myTrendChart = new Chart(ctx, {
@@ -400,14 +392,14 @@ function renderFilteredChart(data, range) {
                     borderWidth: 2,
                     fill: true,
                     tension: 0.1,
-                    pointRadius: range === '5D' ? 4 : 0 // 只有 5 天時顯示點
+                    pointRadius: range === '5D' ? 5 : 0, // 5天模式下點大一點
+                    pointBackgroundColor: 'rgb(239, 68, 68)'
                 },
                 {
                     label: '投入成本',
                     data: data.map(d => d.total_cost),
                     borderColor: 'rgb(100, 116, 139)',
                     borderDash: [5, 5],
-                    borderWidth: 1.5,
                     fill: false,
                     tension: 0.1,
                     pointRadius: 0
@@ -417,50 +409,53 @@ function renderFilteredChart(data, range) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
             scales: {
                 x: {
                     display: true,
-                    grid: { display: false },
                     ticks: {
-                        maxRotation: 0,
-                        autoSkip: false, // 關閉自動跳過，由我們手動控制
+                        autoSkip: range !== '5D', // 5D 模式下「不」自動跳過任何標籤
+                        maxRotation: 45, // 日期多時稍微傾斜
+                        minRotation: 0,
                         callback: function(val, index) {
-                            const dateStr = this.getLabelForValue(val);
+                            const dateStr = this.getLabelForValue(val); // 格式如 "2024-05-20"
                             const date = new Date(dateStr);
-                            const day = date.getDate();
-                            const month = date.getMonth() + 1;
+                            const m = date.getMonth() + 1;
+                            const d = date.getDate();
+
+                            // --- 5天模式：強迫回傳每一天的 月/日 ---
+                            if (range === '5D') {
+                                return `${m}/${d}`; 
+                            }
                             
-                            // 核心邏輯：依照 range 決定哪些標籤要顯示
-                            if (range === '5D') return dateStr.slice(5); // 每天標
-                            
+                            // 1個月：每週標示 (1, 8, 15, 22, 29 號)
                             if (range === '1M') {
-                                // 每周標 (假設 1, 8, 15, 22, 29 號)
-                                return [1, 8, 15, 22].includes(day) ? dateStr.slice(5) : null;
+                                return [1, 8, 15, 22, 29].includes(d) ? `${m}/${d}` : null;
                             }
                             
+                            // 3個月：每兩週標示 (1, 15 號)
                             if (range === '3M') {
-                                // 每 2 周標 (1, 15 號)
-                                return [1, 15].includes(day) ? dateStr.slice(5) : null;
+                                return [1, 15].includes(d) ? `${m}/${d}` : null;
                             }
                             
+                            // 6個月：每個月標示
                             if (range === '6M') {
-                                // 每個月 (1 號)
-                                return day === 1 ? `${month}月` : null;
+                                return d === 1 ? `${m}月` : null;
                             }
                             
+                            // 1年：每兩個月標示
                             if (range === '1Y') {
-                                // 每 2 個月 (單數月 1 號)
-                                return (day === 1 && month % 2 !== 0) ? `${month}月` : null;
+                                return (d === 1 && m % 2 !== 0) ? `${m}月` : null;
                             }
                             
+                            // 2年：每三個月標示
                             if (range === '2Y') {
-                                // 每 3 個月 (1, 4, 7, 10 月的 1 號)
-                                return (day === 1 && [1, 4, 7, 10].includes(month)) ? `${month}月` : null;
+                                return (d === 1 && [1, 4, 7, 10].includes(m)) ? `${m}月` : null;
                             }
-                            
                             return null;
                         }
+                    },
+                    grid: {
+                        display: range === '5D' // 5天模式顯示垂直線，更有對齊感
                     }
                 },
                 y: {
@@ -473,15 +468,8 @@ function renderFilteredChart(data, range) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    padding: 12,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    titleColor: '#1e293b',
-                    bodyColor: '#1e293b',
-                    borderColor: '#e2e8f0',
-                    borderWidth: 1,
-                    callbacks: {
-                        label: (ctx) => ` ${ctx.dataset.label}: $${Math.round(ctx.raw).toLocaleString()}`
-                    }
+                    mode: 'index',
+                    intersect: false
                 }
             }
         }
