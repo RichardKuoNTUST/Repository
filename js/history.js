@@ -163,6 +163,9 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
         </tr>`).join('');
 }
 
+// 全域變數，用來儲存從資料庫抓下來的完整歷史
+let fullHistoryData = [];
+
 async function renderTrendChart(symbol, trades, dividends) {
     const ctx = document.getElementById('trendChart').getContext('2d');
     const loadingMsg = document.getElementById('chart-loading');
@@ -210,19 +213,25 @@ async function renderTrendChart(symbol, trades, dividends) {
             loadingMsg.innerText = `正在更新數據...`;
             await syncDailyDataToDB(symbol, startDate, today, trades, dividends);
         }
-
-        // 重新讀取完整資料繪圖
+    
         const { data: historyData } = await _supabase
             .from('daily_stats')
             .select('*')
             .eq('symbol', symbol)
             .order('date', { ascending: true })
             .limit(730);
-
+    
         if (!historyData || historyData.length === 0) {
-            loadingMsg.innerText = "無數據可顯示";
+            document.getElementById('chart-loading').innerText = "無歷史數據";
             return;
         }
+    
+        // 儲存到全域變數，切換時不用再跑資料庫
+        fullHistoryData = historyData;
+        document.getElementById('chart-loading').style.display = 'none';
+    
+        // 預設顯示 5 天 (或是你想要的預設值)
+        updateChartRange('5D');
 
         loadingMsg.style.display = 'none';
         renderLineChart(ctx, historyData); // 呼叫下方的繪圖函式
@@ -333,4 +342,148 @@ function calculateStatsUntilDate(targetDate, trades, dividends, currentPrice) {
     const totalValue = (totalShares * currentPrice) + realizedProfit + validDividends.reduce((sum, d) => sum + (parseFloat(d.amount) - (d.fee || 0)), 0);
 
     return { totalCost: remainingCost, totalValue: totalValue };
+}
+
+/**
+ * 切換時間範圍的函式
+ */
+function updateChartRange(range) {
+    if (!fullHistoryData || fullHistoryData.length === 0) return;
+
+    // 更新按鈕樣式
+    const buttons = document.querySelectorAll('#chart-filter-group button');
+    buttons.forEach(btn => {
+        btn.className = "px-3 py-1.5 rounded-lg transition hover:bg-white";
+        if (btn.getAttribute('data-range') === range) {
+            btn.className = "px-3 py-1.5 rounded-lg transition bg-white text-blue-600 shadow-sm";
+        }
+    });
+
+    // 計算篩選日期
+    const now = new Date();
+    let filterDate = new Date();
+    let tickStep = 1; // 預設每 1 點顯示一個標籤
+
+    switch(range) {
+        case '5D': filterDate.setDate(now.getDate() - 5); break;
+        case '1M': filterDate.setMonth(now.getMonth() - 1); break;
+        case '3M': filterDate.setMonth(now.getMonth() - 3); break;
+        case '6M': filterDate.setMonth(now.getMonth() - 6); break;
+        case '1Y': filterDate.setFullYear(now.getFullYear() - 1); break;
+        case '2Y': filterDate.setFullYear(now.getFullYear() - 2); break;
+    }
+
+    const filteredData = fullHistoryData.filter(d => new Date(d.date) >= filterDate);
+    
+    // 渲染圖表
+    renderFilteredChart(filteredData, range);
+}
+
+/**
+ * 根據篩選後的資料繪圖
+ */
+function renderFilteredChart(data, range) {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    
+    if (window.myTrendChart) window.myTrendChart.destroy();
+
+    window.myTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.date),
+            datasets: [
+                {
+                    label: '總權益',
+                    data: data.map(d => d.total_value),
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: range === '5D' ? 4 : 0 // 只有 5 天時顯示點
+                },
+                {
+                    label: '投入成本',
+                    data: data.map(d => d.total_cost),
+                    borderColor: 'rgb(100, 116, 139)',
+                    borderDash: [5, 5],
+                    borderWidth: 1.5,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    display: true,
+                    grid: { display: false },
+                    ticks: {
+                        maxRotation: 0,
+                        autoSkip: false, // 關閉自動跳過，由我們手動控制
+                        callback: function(val, index) {
+                            const dateStr = this.getLabelForValue(val);
+                            const date = new Date(dateStr);
+                            const day = date.getDate();
+                            const month = date.getMonth() + 1;
+                            
+                            // 核心邏輯：依照 range 決定哪些標籤要顯示
+                            if (range === '5D') return dateStr.slice(5); // 每天標
+                            
+                            if (range === '1M') {
+                                // 每周標 (假設 1, 8, 15, 22, 29 號)
+                                return [1, 8, 15, 22].includes(day) ? dateStr.slice(5) : null;
+                            }
+                            
+                            if (range === '3M') {
+                                // 每 2 周標 (1, 15 號)
+                                return [1, 15].includes(day) ? dateStr.slice(5) : null;
+                            }
+                            
+                            if (range === '6M') {
+                                // 每個月 (1 號)
+                                return day === 1 ? `${month}月` : null;
+                            }
+                            
+                            if (range === '1Y') {
+                                // 每 2 個月 (單數月 1 號)
+                                return (day === 1 && month % 2 !== 0) ? `${month}月` : null;
+                            }
+                            
+                            if (range === '2Y') {
+                                // 每 3 個月 (1, 4, 7, 10 月的 1 號)
+                                return (day === 1 && [1, 4, 7, 10].includes(month)) ? `${month}月` : null;
+                            }
+                            
+                            return null;
+                        }
+                    }
+                },
+                y: {
+                    position: 'right',
+                    ticks: {
+                        callback: (val) => '$' + Math.round(val).toLocaleString()
+                    }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    padding: 12,
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    titleColor: '#1e293b',
+                    bodyColor: '#1e293b',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.dataset.label}: $${Math.round(ctx.raw).toLocaleString()}`
+                    }
+                }
+            }
+        }
+    });
 }
