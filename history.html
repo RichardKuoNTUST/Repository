@@ -63,10 +63,20 @@
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
         <div class="mt-8 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <h3 class="font-bold text-gray-700 mb-4 flex items-center">
-                <span class="bg-blue-500 w-1 h-4 mr-2 rounded"></span>
-                資產趨勢 (近 2 年)
-            </h3>
+            <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
+                <h3 class="font-bold text-gray-700 flex items-center">
+                    <span class="bg-blue-500 w-1 h-4 mr-2 rounded"></span>
+                    資產趨勢
+                </h3>
+                <div id="chart-filter-group" class="flex bg-gray-100 p-1 rounded-xl text-xs font-bold text-gray-500">
+                    <button onclick="updateChartRange('5D')" class="px-3 py-1.5 rounded-lg transition hover:bg-white" data-range="5D">5天</button>
+                    <button onclick="updateChartRange('1M')" class="px-3 py-1.5 rounded-lg transition hover:bg-white" data-range="1M">1個月</button>
+                    <button onclick="updateChartRange('3M')" class="px-3 py-1.5 rounded-lg transition hover:bg-white" data-range="3M">3個月</button>
+                    <button onclick="updateChartRange('6M')" class="px-3 py-1.5 rounded-lg transition hover:bg-white" data-range="6M">6個月</button>
+                    <button onclick="updateChartRange('1Y')" class="px-3 py-1.5 rounded-lg transition hover:bg-white" data-range="1Y">1年</button>
+                    <button onclick="updateChartRange('2Y')" class="px-3 py-1.5 rounded-lg transition bg-white text-blue-600 shadow-sm" data-range="2Y">2年</button>
+                </div>
+            </div>
             <div class="relative w-full h-72">
                 <canvas id="trendChart"></canvas>
             </div>
