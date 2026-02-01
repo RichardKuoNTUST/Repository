@@ -163,17 +163,18 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
         </tr>`).join('');
 }
 
-// 全域變數，用來儲存從資料庫抓下來的完整歷史
+// --- 全域變數 ---
 let fullHistoryData = [];
 
+/**
+ * 核心功能：啟動圖表流程
+ */
 async function renderTrendChart(symbol, trades, dividends) {
-    const ctx = document.getElementById('trendChart').getContext('2d');
     const loadingMsg = document.getElementById('chart-loading');
     
     try {
         console.log("1. 開始檢查歷史數據狀態...");
         
-        // --- 修正區域：確保變數只宣告一次 ---
         const { data: records, error: dbError } = await _supabase
             .from('daily_stats')
             .select('date')
@@ -187,33 +188,33 @@ async function renderTrendChart(symbol, trades, dividends) {
             return;
         }
 
-        // 這裡宣告一次就好
         const lastDbDate = (records && records.length > 0) ? records[0].date : null;
-        // ----------------------------------
-
         const today = new Date().toISOString().split('T')[0];
         console.log(`2. 資料庫最新日期: ${lastDbDate || '無'}`);
 
         let startDate = null;
         if (!lastDbDate) {
             if (trades.length > 0) {
-                // 注意：這裡直接抓 trades[0].trade_date，前提是 trades 已經是升序
-                startDate = trades[0].trade_date; 
+                // 從第一筆交易日開始補數據
+                const sortedTrades = [...trades].sort((a, b) => new Date(a.trade_date) - new Date(b.trade_date));
+                startDate = sortedTrades[0].trade_date; 
             } else {
                 loadingMsg.innerText = "尚無交易紀錄";
                 return;
             }
-        } else {
+        } else if (lastDbDate < today) {
             const d = new Date(lastDbDate);
             d.setDate(d.getDate() + 1);
             startDate = d.toISOString().split('T')[0];
         }
 
-        if (startDate <= today) {
+        // 如果需要補數據
+        if (startDate && startDate <= today) {
             loadingMsg.innerText = `正在更新數據...`;
             await syncDailyDataToDB(symbol, startDate, today, trades, dividends);
         }
         
+        // 抓取最近 2 年 (約 730 筆)
         const { data: historyData } = await _supabase
             .from('daily_stats')
             .select('*')
@@ -222,19 +223,182 @@ async function renderTrendChart(symbol, trades, dividends) {
             .limit(730);
 
         if (!historyData || historyData.length === 0) {
-            loadingMsg.innerText = "無歷史數據";
+            loadingMsg.innerText = "目前無圖表數據";
             return;
         }
 
         fullHistoryData = historyData;
         loadingMsg.style.display = 'none';
 
-        // --- 關鍵：確保這行在最後執行 ---
+        // 預設啟動 5 天視圖
         updateChartRange('5D'); 
 
     } catch (err) {
-        console.error("圖表錯誤:", err);
+        console.error("圖表啟動失敗:", err);
     }
+}
+
+/**
+ * 同步資料到資料庫 (修正了變數未定義的問題)
+ */
+async function syncDailyDataToDB(symbol, startDate, endDate, allTrades, allDividends) {
+    const stockId = symbol.split('.')[0];
+    try {
+        const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&end_date=${endDate}&token=${FINMIND_TOKEN}`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
+        const res = await fetch(proxyUrl);
+        const raw = await res.json();
+        const json = JSON.parse(raw.contents);
+
+        if (json.data && json.data.length > 0) {
+            let upsertData = json.data.map(p => {
+                const stats = calculateStatsUntilDate(p.date, allTrades, allDividends, p.close);
+                return {
+                    symbol: symbol,
+                    date: p.date, // 修正原 code 的 currDate
+                    close_price: p.close, // 修正原 code 的 closePrice
+                    total_cost: stats.totalCost,
+                    total_value: stats.totalValue
+                };
+            });
+
+            await _supabase.from('daily_stats').upsert(upsertData, { onConflict: 'symbol, date' });
+            console.log(`成功同步 ${upsertData.length} 筆數據到 Supabase`);
+        }
+    } catch (e) {
+        console.error("API 同步失敗:", e);
+    }
+}
+
+/**
+ * 切換時間範圍邏輯
+ */
+function updateChartRange(range) {
+    if (!fullHistoryData || fullHistoryData.length === 0) return;
+
+    // 更新 UI 按鈕狀態
+    const buttons = document.querySelectorAll('#chart-filter-group button');
+    buttons.forEach(btn => {
+        if (btn.getAttribute('data-range') === range) {
+            btn.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+            btn.classList.remove('text-gray-500');
+        } else {
+            btn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
+            btn.classList.add('text-gray-500');
+        }
+    });
+
+    const now = new Date();
+    let filterDate = new Date();
+
+    switch(range) {
+        case '5D': filterDate.setDate(now.getDate() - 5); break;
+        case '1M': filterDate.setMonth(now.getMonth() - 1); break;
+        case '3M': filterDate.setMonth(now.getMonth() - 3); break;
+        case '6M': filterDate.setMonth(now.getMonth() - 6); break;
+        case '1Y': filterDate.setFullYear(now.getFullYear() - 1); break;
+        case '2Y': filterDate.setFullYear(now.getFullYear() - 2); break;
+    }
+
+    const filteredData = fullHistoryData.filter(d => new Date(d.date) >= filterDate);
+    renderFilteredChart(filteredData, range);
+}
+
+/**
+ * 最終雙軸繪圖函式
+ */
+function renderFilteredChart(data, range) {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (window.myTrendChart) window.myTrendChart.destroy();
+
+    window.myTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.date),
+            datasets: [
+                {
+                    label: '股價',
+                    data: data.map(d => d.close_price),
+                    borderColor: 'rgb(59, 130, 246)', // 藍色
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    yAxisID: 'y-price',
+                    tension: 0.1,
+                    pointRadius: 0
+                },
+                {
+                    label: '資產總額',
+                    data: data.map(d => d.total_value),
+                    borderColor: 'rgb(239, 68, 68)', // 紅色
+                    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                    borderWidth: 2,
+                    fill: true,
+                    yAxisID: 'y-value',
+                    tension: 0.1,
+                    pointRadius: range === '5D' ? 4 : 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        autoSkip: range !== '5D', // 5D 模式不跳過日期
+                        maxRotation: 0,
+                        callback: function(val, index) {
+                            const dateStr = this.getLabelForValue(val);
+                            const date = new Date(dateStr);
+                            const m = date.getMonth() + 1;
+                            const d = date.getDate();
+
+                            if (range === '5D') return `${m}/${d}`;
+                            if (range === '1M' && [1, 8, 15, 22, 29].includes(d)) return `${m}/${d}`;
+                            if (range === '3M' && [1, 15].includes(d)) return `${m}/${d}`;
+                            if (range === '6M' && d === 1) return `${m}月`;
+                            if (range === '1Y' && d === 1 && m % 2 !== 0) return `${m}月`;
+                            if (range === '2Y' && d === 1 && [1, 4, 7, 10].includes(m)) return `${m}月`;
+                            return null;
+                        }
+                    }
+                },
+                'y-price': {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: { display: true, text: '股價 ($)', font: { weight: 'bold' } },
+                    ticks: { color: 'rgb(59, 130, 246)' }
+                },
+                'y-value': {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: { display: true, text: '資產總額 ($)', font: { weight: 'bold' } },
+                    grid: { drawOnChartArea: false }, // 避免網格線打架
+                    ticks: { 
+                        color: 'rgb(239, 68, 68)',
+                        callback: (val) => '$' + Math.round(val).toLocaleString()
+                    }
+                }
+            },
+            plugins: {
+                legend: { position: 'top', align: 'end' },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    titleColor: '#1e293b',
+                    bodyColor: '#1e293b',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}`
+                    }
+                }
+            }
+        }
+    });
 }
 
 // 抽取出來的繪圖邏輯，讓代碼更整潔
@@ -272,34 +436,6 @@ function renderLineChart(ctx, data) {
             scales: { x: { display: false }, y: { beginAtZero: false } }
         }
     });
-}
-
-async function syncDailyDataToDB(symbol, startDate, endDate, allTrades, allDividends) {
-    const stockId = symbol.split('.')[0];
-    try {
-        const finMindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&end_date=${endDate}&token=${FINMIND_TOKEN}`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finMindUrl)}`;
-        const res = await fetch(proxyUrl);
-        const raw = await res.json();
-        const json = JSON.parse(raw.contents);
-
-        if (json.data && json.data.length > 0) {
-            let upsertData = json.data.map(p => {
-                const stats = calculateStatsUntilDate(p.date, allTrades, allDividends, p.close);
-                return {
-                    symbol: symbol,
-                    date: currDate,
-                    close_price: closePrice, // 儲存當天收盤價
-                    total_cost: stats.totalCost,
-                    total_value: stats.totalValue
-                };
-            });
-
-            await _supabase.from('daily_stats').upsert(upsertData, { onConflict: 'symbol, date' });
-        }
-    } catch (e) {
-        console.error("API 同步失敗", e);
-    }
 }
 
 function calculateStatsUntilDate(targetDate, trades, dividends, currentPrice) {
@@ -374,105 +510,4 @@ function updateChartRange(range) {
     
     // 渲染圖表
     renderFilteredChart(filteredData, range);
-}
-
-/**
- * 修正後的雙軸繪圖函式：左軸(股價) vs 右軸(資產價值)
- */
-function renderFilteredChart(data, range) {
-    const ctx = document.getElementById('trendChart').getContext('2d');
-    if (window.myTrendChart) window.myTrendChart.destroy();
-
-    // 取得該股票的歷史收盤價（假設從 daily_stats 或另外存）
-    // 如果你在 syncDailyDataToDB 有存 close_price，這裡就可以直接用
-    // 註：若 daily_stats 沒存 close_price，建議在 sync 時加入該欄位
-    
-    window.myTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map(d => d.date),
-            datasets: [
-                {
-                    label: '股票收盤價',
-                    data: data.map(d => d.close_price || 0), // 需確保資料表有存收盤價
-                    borderColor: 'rgb(59, 130, 246)', // 藍色
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    yAxisID: 'y-price', // 指定左軸
-                    tension: 0.1,
-                    pointRadius: 0
-                },
-                {
-                    label: '總資產價值',
-                    data: data.map(d => d.total_value),
-                    borderColor: 'rgb(239, 68, 68)', // 紅色
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    yAxisID: 'y-value', // 指定右軸
-                    tension: 0.1,
-                    pointRadius: range === '5D' ? 5 : 0
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                x: {
-                    ticks: {
-                        autoSkip: range !== '5D',
-                        maxRotation: 0,
-                        callback: function(val) {
-                            const dateStr = this.getLabelForValue(val);
-                            const date = new Date(dateStr);
-                            const m = date.getMonth() + 1;
-                            const d = date.getDate();
-                            if (range === '5D') return `${m}/${d}`;
-                            if (range === '1M' && [1, 8, 15, 22, 29].includes(d)) return `${m}/${d}`;
-                            if (range === '3M' && [1, 15].includes(d)) return `${m}/${d}`;
-                            if (range === '6M' && d === 1) return `${m}月`;
-                            if (range === '1Y' && d === 1 && m % 2 !== 0) return `${m}月`;
-                            if (range === '2Y' && d === 1 && [1, 4, 7, 10].includes(m)) return `${m}月`;
-                            return null;
-                        }
-                    }
-                },
-                'y-price': {
-                    type: 'linear',
-                    display: true,
-                    position: 'left', // 左軸：顯示股價
-                    title: { display: true, text: '股價 ($)' },
-                    ticks: { color: 'rgb(59, 130, 246)' },
-                    grid: { drawOnChartArea: true } // 保留左軸網格線
-                },
-                'y-value': {
-                    type: 'linear',
-                    display: true,
-                    position: 'right', // 右軸：顯示盈虧/資產
-                    title: { display: true, text: '資產總額 ($)' },
-                    ticks: { 
-                        color: 'rgb(239, 68, 68)',
-                        callback: (val) => '$' + Math.round(val).toLocaleString()
-                    },
-                    grid: { drawOnChartArea: false } // 隱藏右軸網格線，避免畫面太亂
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) label += ': ';
-                            if (context.parsed.y !== null) {
-                                label += '$' + Math.round(context.parsed.y).toLocaleString();
-                            }
-                            return label;
-                        }
-                    }
-                }
-            }
-        }
-    });
 }
