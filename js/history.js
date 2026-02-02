@@ -163,6 +163,91 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
         </tr>`).join('');
 }
 
+
+/**
+ * 開啟編輯視窗
+ */
+function openEditModal(table, record) {
+    currentEditData = { table: table, id: record.id, symbol: record.symbol };
+    
+    const modal = document.getElementById('edit-modal');
+    const shareGroup = document.getElementById('edit-share-group');
+    
+    // 填充資料
+    if (table === 'holdings') {
+        document.getElementById('modal-title').innerText = '編輯交易紀錄';
+        document.getElementById('edit-date').value = record.trade_date;
+        document.getElementById('edit-shares').value = record.shares;
+        document.getElementById('edit-amount').value = record.total_price;
+        shareGroup.style.display = 'block';
+    } else {
+        document.getElementById('modal-title').innerText = '編輯股利紀錄';
+        document.getElementById('edit-date').value = record.pay_date;
+        document.getElementById('edit-amount').value = record.amount;
+        shareGroup.style.display = 'none'; // 股利沒有股數欄位
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+/**
+ * 關閉視窗
+ */
+function closeEditModal() {
+    document.getElementById('edit-modal').classList.add('hidden');
+}
+
+/**
+ * 儲存修改內容
+ */
+async function saveEdit() {
+    const { table, id, symbol } = currentEditData;
+    const date = document.getElementById('edit-date').value;
+    const amount = parseFloat(document.getElementById('edit-amount').value);
+    
+    let updateData = {};
+    if (table === 'holdings') {
+        updateData = {
+            trade_date: date,
+            shares: parseFloat(document.getElementById('edit-shares').value),
+            total_price: amount
+        };
+    } else {
+        updateData = {
+            pay_date: date,
+            amount: amount
+        };
+    }
+
+    const { error } = await _supabase.from(table).update(updateData).eq('id', id);
+
+    if (error) {
+        alert("更新失敗: " + error.message);
+    } else {
+        // 更新成功後，清空該股票的趨勢快取，讓它重新計算
+        await _supabase.from('daily_stats').delete().eq('symbol', symbol);
+        location.reload(); // 重新整理頁面
+    }
+}
+
+/**
+ * 刪除紀錄
+ */
+async function deleteRecord() {
+    if (!confirm("確定要刪除此筆紀錄嗎？此動作無法復原。")) return;
+    
+    const { table, id, symbol } = currentEditData;
+    const { error } = await _supabase.from(table).delete().eq('id', id);
+
+    if (error) {
+        alert("刪除失敗: " + error.message);
+    } else {
+        // 刪除後同樣清空快取
+        await _supabase.from('daily_stats').delete().eq('symbol', symbol);
+        location.reload();
+    }
+}
+
 // --- 全域變數 ---
 let fullHistoryData = [];
 
