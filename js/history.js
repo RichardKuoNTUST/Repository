@@ -146,7 +146,7 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
                 <td class="px-4 py-4 font-bold">$${Math.round(t.total_price).toLocaleString()}</td>
                 <td class="px-4 py-4 text-right">${profitHTML}</td>
                 <td class="px-4 py-4 text-right">
-                    <button onclick='openEditModal("holdings", ${JSON.stringify(t)})' class="text-blue-500 text-xs border border-blue-100 px-3 py-1.5 rounded-lg">編輯</button>
+                    <button onclick='openEditModal("${t.trade_date ? 'holdings' : 'dividends'}", ${JSON.stringify(t)})' class="text-blue-500 text-xs border border-blue-100 px-3 py-1.5 rounded-lg">編輯</button>
                 </td>
             </tr>`;
     }).join('');
