@@ -168,28 +168,38 @@ function renderHistoryTables(tradeBody, divBody, trades, dividends, currentPrice
  * 開啟編輯視窗
  */
 function openEditModal(table, record) {
-    currentEditData = { table: table, id: record.id, symbol: record.symbol };
+    // 先儲存當前編輯的目標資訊
+    currentEditData = { 
+        table: table, 
+        id: record.id, 
+        symbol: record.symbol 
+    };
     
     const modal = document.getElementById('edit-modal');
     const shareGroup = document.getElementById('edit-share-group');
-    
+    const modalTitle = document.getElementById('modal-title');
+
+    if (!modal || !modalTitle) {
+        console.error("找不到 Modal 元素，請檢查 HTML 是否已加入");
+        return;
+    }
+
     // 填充資料
     if (table === 'holdings') {
-        document.getElementById('modal-title').innerText = '編輯交易紀錄';
+        modalTitle.innerText = '編輯交易紀錄';
         document.getElementById('edit-date').value = record.trade_date;
         document.getElementById('edit-shares').value = record.shares;
         document.getElementById('edit-amount').value = record.total_price;
         shareGroup.style.display = 'block';
     } else {
-        document.getElementById('modal-title').innerText = '編輯股利紀錄';
+        modalTitle.innerText = '編輯股利紀錄';
         document.getElementById('edit-date').value = record.pay_date;
         document.getElementById('edit-amount').value = record.amount;
-        shareGroup.style.display = 'none'; // 股利沒有股數欄位
+        shareGroup.style.display = 'none'; // 股利不顯示股數
     }
     
-    modal.classList.remove('hidden');
+    modal.classList.remove('hidden'); // 顯示彈窗
 }
-
 /**
  * 關閉視窗
  */
