@@ -85,20 +85,35 @@
         
         <div class="h-20"></div> 
     </div>
-    <div id="editModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
-        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+    <div id="edit-modal" class="hidden fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
             <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h3 id="edit-modal-title" class="text-xl font-bold text-slate-800">編輯紀錄</h3>
-                <button onclick="closeEditModal()" class="text-gray-400">✕</button>
+                <h3 class="font-bold text-gray-700" id="modal-title">編輯紀錄</h3>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <div class="p-6 space-y-4" id="edit-modal-body">
+    
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1">日期</label>
+                    <input type="date" id="edit-date" class="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-            <div class="p-6 bg-gray-50 flex flex-col gap-3">
-                <div class="flex space-x-3">
-                    <button onclick="closeEditModal()" class="flex-1 bg-white text-gray-500 font-bold py-3 rounded-2xl border hover:bg-gray-100 transition">Cancel</button>
-                    <button id="btn-save" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-2xl shadow-lg hover:bg-blue-700 transition">Save</button>
+                
+                <div id="edit-share-group">
+                    <label class="block text-xs font-bold text-gray-400 mb-1">股數 (買入為正，賣出為負)</label>
+                    <input type="number" id="edit-shares" class="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <button id="btn-delete" class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-2xl border border-red-100 hover:bg-red-100 transition">Delete</button>
+    
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1">總金額 (含手續費)</label>
+                    <input type="number" id="edit-amount" class="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+    
+            <div class="p-6 bg-gray-50 flex gap-3">
+                <button onclick="deleteRecord()" class="px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition">刪除</button>
+                <div class="flex-1"></div>
+                <button onclick="closeEditModal()" class="px-4 py-2 text-sm font-bold text-gray-500">取消</button>
+                <button onclick="saveEdit()" class="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md transition">儲存修改</button>
             </div>
         </div>
     </div>
